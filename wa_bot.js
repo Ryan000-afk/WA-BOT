@@ -47,21 +47,20 @@ const DEFAULT_SYSTEM_PROMPT =
   process.env.WA_AI_SYSTEM_PROMPT || 
   `Kamu adalah asisten AI WhatsApp pintar, sopan, ramah, dan profesional.
 - PERATURAN MUTLAK: Kamu adalah ASISTEN VIRTUAL RESMI. DILARANG KERAS bertingkah laku sebagai pacar, pasangan romantis, bersikap manja, atau memanggil lawan bicara dengan sebutan romantis (seperti 'sayang', 'beb', 'pacarku', 'cintaku', dsb).
-- Berikan jawaban yang informatif, jelas, to the point, dan bermanfaat bagi pengguna.
+- Berikan jawaban yang informatif, ringkas, jelas, to the point, dan bermanfaat bagi pengguna.
 - Gunakan bahasa Indonesia yang santai, ramah, namun tetap menjaga etika dan sopan santun.
 - Fitur Spesial Bot yang kamu miliki:
-  1. Unduh Instagram: Reels, Foto, Carousel, & Story (Perintah: /download.ig <link> atau /ig)
-  2. Unduh Facebook: Video & Reels kualitas HD (Perintah: /download.fb <link> atau /fb)
-  3. Unduh Threads: Foto & Video (Perintah: /download.threads <link> atau /threads)
-  4. Unduh TikTok: Video tanpa watermark & Slide Foto (Perintah: /download.tiktok <link> atau /tt)
-  5. Unduh Xiaohongshu / RedNote: Video, Foto HD, & Live Photo bergerak (Perintah: /download.xiaohongshu <link> atau /xhs)
-  6. Unduh Twitter / X: Video & GIF (Perintah: /download.tw <link> atau /x)
-  7. Unduh YouTube: Video & Shorts (Perintah: /download.yt <link> atau /yt)
+  1. Unduh Instagram (/download.ig <link>)
+  2. Unduh TikTok (/download.tt <link>)
+  3. Unduh RedNote / Xiaohongshu (/download.rn <link>)
+  4. Unduh Facebook (/download.fb <link>)
+  5. Unduh Threads (/download.th <link>)
+  6. Unduh YouTube (/download.yt <link>)
+  7. Unduh Twitter / X (/download.x <link>)
   8. Cek Status VPS (/status) dan Kecepatan Respon (/ping)
-- Jika pengguna bertanya tentang fitur bot, jelaskan perintah-perintah di atas dengan rapi.
-- Pengguna juga bisa langsung mengirimkan/menempelkan tautan media sosial langsung ke chat tanpa harus mengetik awalan perintah!
+- Pengguna juga bisa langsung mengirimkan/menempelkan tautan link langsung ke chat tanpa harus mengetik perintah!
 - Gunakan formatting WhatsApp yang nyaman dibaca (*bold*, _italic_, daftar poin).
-- Jika pengguna bertanya dalam bahasa lain (misal Inggris atau Mandarin), jawablah dalam bahasa yang sama dengan profesional.`;
+- Jika pengguna bertanya dalam bahasa lain, jawablah dalam bahasa yang sama dengan profesional.`;
 
 // Konfigurasi perilaku
 const CONFIG = {
@@ -864,60 +863,29 @@ async function startWhatsAppBot() {
         // ================================================================
         if (lowerBody === '/menu' || lowerBody === '/help' || lowerBody === '!menu' || lowerBody === '!help') {
           const menuText = 
-`╭────────────────────────────╮
-│    🤖 *WHATSAPP AI BOT*    │
-│  _Online 24 Jam di VPS_   │
-╰────────────────────────────╯
+`╭────────────────────────╮
+│   🤖 *WHATSAPP BOT*    │
+╰────────────────────────╯
 
 Halo, *${pushName}*! 👋
-Berikut daftar fitur dan perintah yang tersedia:
 
-📥 *DOWNLOADER (MULTI PLATFORM)*
-├ • */download.ig <link>* (atau */ig*)
-│   _Instagram Reels, Foto, Carousel, & Story_
-│   Contoh: \`/download.ig https://instagram.com/reel/...\`
-│
-├ • */download.fb <link>* (atau */fb*)
-│   _Facebook Video & Reels kualitas HD_
-│   Contoh: \`/download.fb https://facebook.com/watch/...\`
-│
-├ • */download.threads <link>* (atau */threads*)
-│   _Foto & Video dari Threads_
-│   Contoh: \`/download.threads https://threads.net/...\`
-│
-├ • */download.tiktok <link>* (atau */tt*)
-│   _Video TikTok HD tanpa watermark & Slide Foto_
-│   Contoh: \`/download.tiktok https://vt.tiktok.com/...\`
-│
-├ • */download.xiaohongshu <link>* (atau */xhs*)
-│   _Video, Foto HD Asli, & Live Photo (RedNote)_
-│   Contoh: \`/download.xiaohongshu http://xhslink.com/...\`
-│
-├ • */download.tw <link>* (atau */x*)
-│   _Video & GIF Twitter / X_
-│   Contoh: \`/download.tw https://x.com/...\`
-│
-├ • */download.yt <link>* (atau */yt*)
-│   _YouTube Shorts & Video (Maks 50MB)_
-│   Contoh: \`/download.yt https://youtu.be/...\`
-╰────────────────────────────
+📥 *DOWNLOADER*
+├ • */download.ig <link>*
+├ • */download.tt <link>*
+├ • */download.rn <link>*
+├ • */download.fb <link>*
+├ • */download.th <link>*
+├ • */download.yt <link>*
+├ • */download.x <link>*
+╰────────────────────────
 
-🧠 *AI ASSISTANT (GEMINI)*
-├ • */ai <pertanyaan>*
-│   _Tanya atau diskusi apa saja dengan Gemini AI_
-│   Contoh: \`/ai berikan ide ide konten media sosial\`
-│
-├ • */reset*
-│   _Hapus riwayat chat untuk memulai topik baru_
-╰────────────────────────────
+🧠 *AI & SISTEM*
+├ • */ai <teks>* : Tanya AI
+├ • */reset* : Hapus riwayat chat
+├ • */ping* : Cek kecepatan bot
+├ • */status* : Info server VPS
 
-⚙️ *SISTEM & INFORMASI*
-├ • */menu* : Menampilkan menu perintah ini
-├ • */ping* : Cek kecepatan respon bot
-├ • */status* : Cek info server VPS & RAM
-╰────────────────────────────
-
-💡 *Tips Praktis*: Anda tidak wajib mengetik perintah! Cukup tempelkan (paste) link langsung ke chat ini, bot akan otomatis mendeteksi platformnya!`;
+💡 _Tips: Bisa langsung kirim/paste link ke chat tanpa ketik perintah!_`;
 
           await sock.sendMessage(remoteJid, { text: menuText }, { quoted: msg });
           continue;
@@ -978,9 +946,10 @@ Berikut daftar fitur dan perintah yang tersedia:
         }
 
         // ================================================================
-        // 5. DOWNLOAD INSTAGRAM (/download.ig <link> atau /ig atau link langsung)
+        // 5. DOWNLOAD INSTAGRAM (/download.ig <link>)
         // ================================================================
         const isIgCommand = lowerBody.startsWith('/download.ig') ||
+                            lowerBody.startsWith('/downdload.ig') ||
                             lowerBody.startsWith('/download.instagram') ||
                             lowerBody.startsWith('/ig') ||
                             lowerBody.startsWith('!ig') ||
@@ -992,13 +961,13 @@ Berikut daftar fitur dan perintah yang tersedia:
           const igUrl = igMatch ? igMatch[0] : '';
           if (!igUrl) {
             await sock.sendMessage(remoteJid, { 
-              text: '⚠️ *Format Perintah Instagram*\n\nGunakan format:\n*/download.ig <link_instagram>*\nContoh: \`/download.ig https://www.instagram.com/reel/xxxxxx/\`' 
+              text: '⚠️ *Format*: */download.ig <link_ig>*\nContoh: `/download.ig https://instagram.com/reel/xxxxxx/`' 
             }, { quoted: msg });
             continue;
           }
 
           console.log(`📸 Mendeteksi link Instagram dari ${pushName}: ${igUrl}`);
-          await sock.sendMessage(remoteJid, { text: '⏳ *Sedang memproses dan mengunduh konten Instagram...*\nMohon tunggu beberapa detik ya!' }, { quoted: msg });
+          await sock.sendMessage(remoteJid, { text: '⏳ *Sedang memproses konten Instagram...*' }, { quoted: msg });
           await sock.sendPresenceUpdate('recording', remoteJid);
 
           const result = await downloadInstagram(igUrl);
@@ -1009,7 +978,7 @@ Berikut daftar fitur dan perintah yang tersedia:
               const maxItems = Math.min(result.mediaList.length, 10);
               for (let i = 0; i < maxItems; i++) {
                 const item = result.mediaList[i];
-                const caption = (i === 0) ? `📸 *Instagram Downloader*\nTotal media: ${result.mediaList.length}\n⚡ _Berhasil diunduh oleh AI Bot_` : undefined;
+                const caption = (i === 0) ? `📸 *Instagram Downloader* (${result.mediaList.length} media)` : undefined;
                 try {
                   const mediaRes = await fetch(item.url);
                   if (mediaRes.ok) {
@@ -1028,29 +997,30 @@ Berikut daftar fitur dan perintah yang tersedia:
               if (result.type === 'video') {
                 await sock.sendMessage(remoteJid, { 
                   video: result.buffer, 
-                  caption: '📸 *Instagram Reel / Video*\n⚡ _Berhasil diunduh oleh AI WhatsApp Bot!_',
+                  caption: '📸 *Instagram Reel / Video*',
                   mimetype: 'video/mp4' 
                 }, { quoted: msg });
               } else {
                 await sock.sendMessage(remoteJid, { 
                   image: result.buffer, 
-                  caption: '📸 *Instagram Photo*\n⚡ _Berhasil diunduh oleh AI WhatsApp Bot!_' 
+                  caption: '📸 *Instagram Photo*' 
                 }, { quoted: msg });
               }
             }
             console.log(`✅ Instagram media berhasil dikirim ke ${pushName}`);
           } else {
             await sock.sendMessage(remoteJid, { 
-              text: `❌ *Gagal mengunduh konten Instagram*\n\nAlasan: ${result.error}\n_Pastikan akun tidak diprivat dan tautannya aktif._` 
+              text: `❌ *Gagal mengunduh Instagram*: ${result.error}` 
             }, { quoted: msg });
           }
           continue;
         }
 
         // ================================================================
-        // 6. DOWNLOAD FACEBOOK (/download.fb <link> atau /fb atau link langsung)
+        // 6. DOWNLOAD FACEBOOK (/download.fb <link>)
         // ================================================================
         const isFbCommand = lowerBody.startsWith('/download.fb') ||
+                            lowerBody.startsWith('/downdload.fb') ||
                             lowerBody.startsWith('/download.facebook') ||
                             lowerBody.startsWith('/fb') ||
                             lowerBody.startsWith('!fb') ||
@@ -1062,7 +1032,7 @@ Berikut daftar fitur dan perintah yang tersedia:
           const fbUrl = fbMatch ? fbMatch[0] : '';
           if (!fbUrl) {
             await sock.sendMessage(remoteJid, { 
-              text: '⚠️ *Format Perintah Facebook*\n\nGunakan format:\n*/download.fb <link_facebook>*\nContoh: \`/download.fb https://fb.watch/xxxxxx/\`' 
+              text: '⚠️ *Format*: */download.fb <link_fb>*\nContoh: `/download.fb https://fb.watch/xxxxxx/`' 
             }, { quoted: msg });
             continue;
           }
@@ -1090,12 +1060,16 @@ Berikut daftar fitur dan perintah yang tersedia:
         }
 
         // ================================================================
-        // 7. DOWNLOAD THREADS (/download.threads <link> atau /threads)
+        // 7. DOWNLOAD THREADS (/download.th <link>)
         // ================================================================
-        const isThreadsCommand = lowerBody.startsWith('/download.threads') ||
+        const isThreadsCommand = lowerBody.startsWith('/download.th') ||
+                                 lowerBody.startsWith('/downdload.th') ||
+                                 lowerBody.startsWith('/download.threads') ||
+                                 lowerBody.startsWith('/downdload.threads') ||
+                                 lowerBody.startsWith('/th') ||
                                  lowerBody.startsWith('/threads') ||
-                                 lowerBody.startsWith('!threads') ||
-                                 lowerBody.startsWith('!download.threads');
+                                 lowerBody.startsWith('!th') ||
+                                 lowerBody.startsWith('!download.th');
 
         const threadsMatch = body.match(THREADS_REGEX);
 
@@ -1103,13 +1077,13 @@ Berikut daftar fitur dan perintah yang tersedia:
           const threadsUrl = threadsMatch ? threadsMatch[0] : '';
           if (!threadsUrl) {
             await sock.sendMessage(remoteJid, { 
-              text: '⚠️ *Format Perintah Threads*\n\nGunakan format:\n*/download.threads <link_threads>*\nContoh: \`/download.threads https://www.threads.net/@user/post/xxxx\`' 
+              text: '⚠️ *Format*: */download.th <link_threads>*\nContoh: `/download.th https://www.threads.net/@user/post/xxxx`' 
             }, { quoted: msg });
             continue;
           }
 
           console.log(`🧵 Mendeteksi link Threads dari ${pushName}: ${threadsUrl}`);
-          await sock.sendMessage(remoteJid, { text: '⏳ *Sedang mengunduh konten Threads...*\nMohon tunggu beberapa detik ya!' }, { quoted: msg });
+          await sock.sendMessage(remoteJid, { text: '⏳ *Sedang mengunduh konten Threads...*' }, { quoted: msg });
           await sock.sendPresenceUpdate('recording', remoteJid);
 
           const result = await downloadThreads(threadsUrl);
@@ -1119,39 +1093,43 @@ Berikut daftar fitur dan perintah yang tersedia:
             if (result.type === 'video' && result.buffer) {
               await sock.sendMessage(remoteJid, {
                 video: result.buffer,
-                caption: '🧵 *Threads Video Downloader*\n⚡ _Berhasil diunduh oleh AI WhatsApp Bot!_',
+                caption: '🧵 *Threads Video*',
                 mimetype: 'video/mp4'
               }, { quoted: msg });
             } else if (result.type === 'gallery' && result.images) {
               for (let i = 0; i < Math.min(result.images.length, 10); i++) {
                 await sock.sendMessage(remoteJid, {
                   image: { url: result.images[i] },
-                  caption: i === 0 ? `🧵 *Threads Media* (${result.images.length} foto)\n⚡ _Berhasil diunduh oleh AI WhatsApp Bot!_` : undefined
+                  caption: i === 0 ? `🧵 *Threads Media* (${result.images.length} foto)` : undefined
                 });
               }
             } else if (result.buffer) {
               await sock.sendMessage(remoteJid, {
                 image: result.buffer,
-                caption: '🧵 *Threads Image*\n⚡ _Berhasil diunduh oleh AI WhatsApp Bot!_'
+                caption: '🧵 *Threads Image*'
               }, { quoted: msg });
             }
             console.log(`✅ Konten Threads berhasil dikirim ke ${pushName}`);
           } else {
             await sock.sendMessage(remoteJid, {
-              text: `❌ *Gagal mengunduh konten Threads*\n\nAlasan: ${result.error}\n_Pastikan tautan benar dan postingan bersifat publik._`
+              text: `❌ *Gagal mengunduh Threads*: ${result.error}`
             }, { quoted: msg });
           }
           continue;
         }
 
         // ================================================================
-        // 8. DOWNLOAD XIAOHONGSHU (/download.xiaohongshu <link>)
+        // 8. DOWNLOAD REDNOTE / XIAOHONGSHU (/download.rn <link>)
         // ================================================================
-        const isXhsCommand = lowerBody.startsWith('/download.xiaohongshu') ||
+        const isXhsCommand = lowerBody.startsWith('/download.rn') ||
+                             lowerBody.startsWith('/downdload.rn') ||
+                             lowerBody.startsWith('/download.rednote') ||
+                             lowerBody.startsWith('/download.xiaohongshu') ||
                              lowerBody.startsWith('/download.xhs') ||
-                             lowerBody.startsWith('/xiaohongshu') ||
+                             lowerBody.startsWith('/rn') ||
                              lowerBody.startsWith('/xhs') ||
-                             lowerBody.startsWith('!download.xiaohongshu');
+                             lowerBody.startsWith('!rn') ||
+                             lowerBody.startsWith('!download.rn');
 
         const xhsMatch = body.match(XHS_REGEX);
 
@@ -1159,25 +1137,14 @@ Berikut daftar fitur dan perintah yang tersedia:
           const xhsUrl = xhsMatch ? xhsMatch[0] : '';
 
           if (!xhsUrl) {
-            const helpMsg = 
-`⚠️ *Format Perintah Xiaohongshu*
-
-Gunakan format:
-*/download.xiaohongshu <link_postingan>*
-
-Contoh:
-\`/download.xiaohongshu http://xhslink.com/a/xxxxxx\`
-
-_Fitur: Mengunduh Video tanpa watermark, Foto resolusi asli, dan Live Photo bergerak!_`;
-            await sock.sendMessage(remoteJid, { text: helpMsg }, { quoted: msg });
+            await sock.sendMessage(remoteJid, { 
+              text: '⚠️ *Format*: */download.rn <link_rednote>*\nContoh: `/download.rn http://xhslink.com/xxxx`' 
+            }, { quoted: msg });
             continue;
           }
 
-          console.log(`📕 Mendeteksi tautan Xiaohongshu dari ${pushName}: ${xhsUrl}`);
-
-          await sock.sendMessage(remoteJid, { 
-            text: '⏳ *Sedang mendownload konten Xiaohongshu (RedNote)...*\nMohon tunggu beberapa detik ya!' 
-          }, { quoted: msg });
+          console.log(`📕 Mendeteksi tautan RedNote/Xiaohongshu dari ${pushName}: ${xhsUrl}`);
+          await sock.sendMessage(remoteJid, { text: '⏳ *Sedang mengunduh konten RedNote...*' }, { quoted: msg });
 
           await sock.sendPresenceUpdate('recording', remoteJid);
           const result = await downloadXiaohongshu(xhsUrl);
@@ -1185,21 +1152,14 @@ _Fitur: Mengunduh Video tanpa watermark, Foto resolusi asli, dan Live Photo berg
 
           if (result.success) {
             if (result.type === 'video') {
-              const caption = 
-`📕 *Xiaohongshu Video Downloader (No Watermark)*
-
-👤 *Author*: ${result.author}
-📝 *Judul*: ${result.title}
-${result.desc ? `\n💬 *Deskripsi*: ${result.desc.substring(0, 150)}...` : ''}
-
-⚡ _Berhasil diunduh tanpa watermark oleh AI WhatsApp Bot!_`;
+              const caption = `📕 *RedNote Video (No Watermark)*\n👤 ${result.author} - ${result.title}`;
 
               await sock.sendMessage(remoteJid, {
                 video: result.videoBuffer,
                 caption: caption,
                 mimetype: 'video/mp4'
               }, { quoted: msg });
-              console.log(`✅ Video Xiaohongshu berhasil dikirim ke ${pushName}`);
+              console.log(`✅ Video RedNote berhasil dikirim ke ${pushName}`);
             } else if (result.type === 'gallery') {
               let livePhotoCount = 0;
               const totalItems = result.mediaItems.length;
@@ -1208,7 +1168,7 @@ ${result.desc ? `\n💬 *Deskripsi*: ${result.desc.substring(0, 150)}...` : ''}
                 const item = result.mediaItems[i];
                 const isFirst = i === 0;
                 const caption = isFirst 
-                  ? `📕 *Xiaohongshu Media Gallery*\n👤 *Author*: ${result.author}\n📝 *Judul*: ${result.title}\n📷 Total: ${totalItems} foto ${item.isLivePhoto ? '(Termasuk Live Photo)' : ''}`
+                  ? `📕 *RedNote Media* (${totalItems} foto)\n👤 ${result.author}`
                   : undefined;
 
                 if (item.photoUrl) {
@@ -1226,7 +1186,7 @@ ${result.desc ? `\n💬 *Deskripsi*: ${result.desc.substring(0, 150)}...` : ''}
                       const liveBuf = Buffer.from(await liveRes.arrayBuffer());
                       await sock.sendMessage(remoteJid, {
                         video: liveBuf,
-                        caption: `✨ *Live Photo Motion Clip #${i + 1}* (Klip foto bergerak/dinamis)`,
+                        caption: `✨ *Live Photo Motion #${i + 1}*`,
                         mimetype: 'video/mp4'
                       });
                     }
@@ -1235,11 +1195,11 @@ ${result.desc ? `\n💬 *Deskripsi*: ${result.desc.substring(0, 150)}...` : ''}
                   }
                 }
               }
-              console.log(`✅ ${totalItems} media Xiaohongshu (${livePhotoCount} Live Photo) berhasil dikirim ke ${pushName}`);
+              console.log(`✅ ${totalItems} media RedNote (${livePhotoCount} Live Photo) berhasil dikirim ke ${pushName}`);
             }
           } else {
             await sock.sendMessage(remoteJid, {
-              text: `❌ *Gagal mengunduh konten Xiaohongshu*\n\nAlasan: ${result.error}\n_Pastikan tautan benar dan postingan dapat diakses publik._`
+              text: `❌ *Gagal mengunduh RedNote*: ${result.error}`
             }, { quoted: msg });
           }
 
@@ -1247,13 +1207,16 @@ ${result.desc ? `\n💬 *Deskripsi*: ${result.desc.substring(0, 150)}...` : ''}
         }
 
         // ================================================================
-        // 9. DOWNLOAD TIKTOK (/download.tiktok <link>)
+        // 9. DOWNLOAD TIKTOK (/download.tt <link>)
         // ================================================================
-        const isTtCommand = lowerBody.startsWith('/download.tiktok') ||
-                            lowerBody.startsWith('/download.tt') ||
-                            lowerBody.startsWith('/tiktok') ||
+        const isTtCommand = lowerBody.startsWith('/download.tt') ||
+                            lowerBody.startsWith('/downdload.tt') ||
+                            lowerBody.startsWith('/download.tiktok') ||
+                            lowerBody.startsWith('/downdload.tiktok') ||
                             lowerBody.startsWith('/tt') ||
-                            lowerBody.startsWith('!download.tiktok');
+                            lowerBody.startsWith('/tiktok') ||
+                            lowerBody.startsWith('!tt') ||
+                            lowerBody.startsWith('!download.tt');
 
         const tiktokMatch = body.match(TIKTOK_REGEX);
 
@@ -1261,25 +1224,14 @@ ${result.desc ? `\n💬 *Deskripsi*: ${result.desc.substring(0, 150)}...` : ''}
           const tiktokUrl = tiktokMatch ? tiktokMatch[0] : '';
 
           if (!tiktokUrl) {
-            const helpMsg = 
-`⚠️ *Format Perintah TikTok*
-
-Gunakan format:
-*/download.tiktok <link_video>*
-
-Contoh:
-\`/download.tiktok https://vt.tiktok.com/xxxxxx/\`
-
-_Fitur: Mengunduh Video HD tanpa watermark dan Slide Foto!_`;
-            await sock.sendMessage(remoteJid, { text: helpMsg }, { quoted: msg });
+            await sock.sendMessage(remoteJid, { 
+              text: '⚠️ *Format*: */download.tt <link_tiktok>*\nContoh: `/download.tt https://vt.tiktok.com/xxxxxx/`' 
+            }, { quoted: msg });
             continue;
           }
 
           console.log(`🎬 Mendeteksi tautan TikTok dari ${pushName}: ${tiktokUrl}`);
-
-          await sock.sendMessage(remoteJid, { 
-            text: '⏳ *Sedang mendownload video TikTok tanpa watermark...*\nMohon tunggu beberapa detik ya!' 
-          }, { quoted: msg });
+          await sock.sendMessage(remoteJid, { text: '⏳ *Sedang mengunduh TikTok...*' }, { quoted: msg });
 
           await sock.sendPresenceUpdate('recording', remoteJid);
           const result = await downloadTikTokVideo(tiktokUrl);
@@ -1287,13 +1239,7 @@ _Fitur: Mengunduh Video HD tanpa watermark dan Slide Foto!_`;
 
           if (result.success) {
             if (result.type === 'video') {
-              const caption = 
-`🎬 *TikTok Video Downloader (No Watermark)*
-
-👤 *Author*: ${result.author}
-📝 *Judul*: ${result.title}
-
-⚡ _Berhasil diunduh tanpa watermark oleh AI WhatsApp Bot!_`;
+              const caption = `🎬 *TikTok Video (No Watermark)*\n👤 ${result.author} - ${result.title}`;
 
               await sock.sendMessage(remoteJid, {
                 video: result.videoBuffer,
@@ -1305,14 +1251,14 @@ _Fitur: Mengunduh Video HD tanpa watermark dan Slide Foto!_`;
               for (let i = 0; i < Math.min(result.images.length, 10); i++) {
                 await sock.sendMessage(remoteJid, {
                   image: { url: result.images[i] },
-                  caption: i === 0 ? `📸 *Slide Foto TikTok* (${result.images.length} foto)\n👤 @${result.author}\n📝 ${result.title}` : undefined
+                  caption: i === 0 ? `📸 *Slide Foto TikTok* (${result.images.length} foto)\n👤 @${result.author}` : undefined
                 });
               }
               console.log(`✅ ${result.images.length} Foto Slide TikTok berhasil dikirim ke ${pushName}`);
             }
           } else {
             await sock.sendMessage(remoteJid, {
-              text: `❌ *Gagal mengunduh video TikTok*\n\nAlasan: ${result.error}\n_Pastikan tautan benar dan video bersifat publik._`
+              text: `❌ *Gagal mengunduh TikTok*: ${result.error}`
             }, { quoted: msg });
           }
 
@@ -1320,14 +1266,17 @@ _Fitur: Mengunduh Video HD tanpa watermark dan Slide Foto!_`;
         }
 
         // ================================================================
-        // 10. DOWNLOAD TWITTER / X (/download.tw <link> atau /tw atau /x)
+        // 10. DOWNLOAD TWITTER / X (/download.x <link>)
         // ================================================================
-        const isTwCommand = lowerBody.startsWith('/download.tw') ||
+        const isTwCommand = lowerBody.startsWith('/download.x') ||
+                            lowerBody.startsWith('/downdload.x') ||
+                            lowerBody.startsWith('/download.tw') ||
+                            lowerBody.startsWith('/downdload.tw') ||
                             lowerBody.startsWith('/download.twitter') ||
-                            lowerBody.startsWith('/download.x') ||
-                            lowerBody.startsWith('/tw') ||
                             lowerBody.startsWith('/x ') ||
                             lowerBody === '/x' ||
+                            lowerBody.startsWith('/tw') ||
+                            lowerBody.startsWith('!x') ||
                             lowerBody.startsWith('!tw');
 
         const twMatch = body.match(TWITTER_REGEX);
@@ -1336,13 +1285,13 @@ _Fitur: Mengunduh Video HD tanpa watermark dan Slide Foto!_`;
           const twUrl = twMatch ? twMatch[0] : '';
           if (!twUrl) {
             await sock.sendMessage(remoteJid, { 
-              text: '⚠️ *Format Perintah Twitter/X*\n\nGunakan format:\n*/download.tw <link_tweet>*\nContoh: \`/download.tw https://x.com/user/status/xxxx\`' 
+              text: '⚠️ *Format*: */download.x <link_x>*\nContoh: `/download.x https://x.com/user/status/xxxx`' 
             }, { quoted: msg });
             continue;
           }
 
           console.log(`🐦 Mendeteksi link Twitter/X dari ${pushName}: ${twUrl}`);
-          await sock.sendMessage(remoteJid, { text: '⏳ *Sedang mengunduh video Twitter/X...*\nMohon tunggu beberapa detik ya!' }, { quoted: msg });
+          await sock.sendMessage(remoteJid, { text: '⏳ *Sedang mengunduh video Twitter/X...*' }, { quoted: msg });
           await sock.sendPresenceUpdate('recording', remoteJid);
 
           const result = await downloadTwitter(twUrl);
@@ -1351,22 +1300,23 @@ _Fitur: Mengunduh Video HD tanpa watermark dan Slide Foto!_`;
           if (result.success && result.buffer) {
             await sock.sendMessage(remoteJid, {
               video: result.buffer,
-              caption: `🐦 *${result.title || 'Twitter / X Video'}*\n⚡ _Berhasil diunduh oleh AI WhatsApp Bot!_`,
+              caption: `🐦 *Twitter / X Video*`,
               mimetype: 'video/mp4'
             }, { quoted: msg });
             console.log(`✅ Video Twitter berhasil dikirim ke ${pushName}`);
           } else {
             await sock.sendMessage(remoteJid, {
-              text: `❌ *Gagal mengunduh video Twitter/X*\n\nAlasan: ${result.error}\n_Pastikan postingan memiliki video publik._`
+              text: `❌ *Gagal mengunduh Twitter/X*: ${result.error}`
             }, { quoted: msg });
           }
           continue;
         }
 
         // ================================================================
-        // 11. DOWNLOAD YOUTUBE (/download.yt <link> atau /yt)
+        // 11. DOWNLOAD YOUTUBE (/download.yt <link>)
         // ================================================================
         const isYtCommand = lowerBody.startsWith('/download.yt') ||
+                            lowerBody.startsWith('/downdload.yt') ||
                             lowerBody.startsWith('/download.youtube') ||
                             lowerBody.startsWith('/yt') ||
                             lowerBody.startsWith('!yt') ||
@@ -1378,13 +1328,13 @@ _Fitur: Mengunduh Video HD tanpa watermark dan Slide Foto!_`;
           const ytUrl = ytMatch ? ytMatch[0] : '';
           if (!ytUrl) {
             await sock.sendMessage(remoteJid, { 
-              text: '⚠️ *Format Perintah YouTube*\n\nGunakan format:\n*/download.yt <link_youtube>*\nContoh: \`/download.yt https://youtu.be/xxxx\`' 
+              text: '⚠️ *Format*: */download.yt <link_youtube>*\nContoh: `/download.yt https://youtu.be/xxxx`' 
             }, { quoted: msg });
             continue;
           }
 
           console.log(`▶️ Mendeteksi link YouTube dari ${pushName}: ${ytUrl}`);
-          await sock.sendMessage(remoteJid, { text: '⏳ *Sedang mengunduh video/Shorts YouTube...*\nMohon tunggu beberapa saat ya!' }, { quoted: msg });
+          await sock.sendMessage(remoteJid, { text: '⏳ *Sedang mengunduh video YouTube...*' }, { quoted: msg });
           await sock.sendPresenceUpdate('recording', remoteJid);
 
           const result = await downloadYouTube(ytUrl);
@@ -1393,13 +1343,13 @@ _Fitur: Mengunduh Video HD tanpa watermark dan Slide Foto!_`;
           if (result.success && result.buffer) {
             await sock.sendMessage(remoteJid, {
               video: result.buffer,
-              caption: `▶️ *YouTube Downloader*\n⚡ _Berhasil diunduh oleh AI WhatsApp Bot!_`,
+              caption: `▶️ *YouTube Video*`,
               mimetype: 'video/mp4'
             }, { quoted: msg });
             console.log(`✅ Video YouTube berhasil dikirim ke ${pushName}`);
           } else {
             await sock.sendMessage(remoteJid, {
-              text: `❌ *Gagal mengunduh video YouTube*\n\nAlasan: ${result.error}\n_Catatan: Bot hanya dapat mengunduh video maksimal 50MB._`
+              text: `❌ *Gagal mengunduh YouTube*: ${result.error}`
             }, { quoted: msg });
           }
           continue;
