@@ -1810,7 +1810,8 @@ Nikmati bot WhatsApp tanpa jeda iklan/promosi sama sekali dan fitur eksklusif!
           const qrisCaption = 
 `💎 *PEMBAYARAN QRIS RESMI (ALL PAYMENT)* 💎
 
-Silakan scan kode QRIS di atas untuk melakukan pembayaran:
+🏪 *Nama Merchant*: ECONOMY DIGITAL SINGAPORE
+🆔 *NMID*: ID1026506686207
 ✅ *Mendukung Semua Pembayaran*:
 • E-Wallet: Dana, OVO, GoPay, ShopeePay, LinkAja, AstraPay, dll.
 • M-Banking: BCA, Mandiri, BRI, BNI, BSI, Seabank, Neo, Jago, dll.
@@ -1829,25 +1830,31 @@ Silakan scan kode QRIS di atas untuk melakukan pembayaran:
 • Rp 30.000 : Tanpa Iklan + Admin Menu + 24 Jam CS 60 Hari
 
 ⚡ *AKTIVASI OTOMATIS (AI VISION)*:
-Setelah transfer, kirimkan foto struk/bukti transfer ke bot dengan caption:
+Setelah transfer berhasil, kirim foto bukti transfer ke bot dengan caption:
 👉 */konfirmasi*
-Sistem AI Vision akan langsung memverifikasi struk Anda dan mengaktifkan status Bebas Iklan dalam hitungan detik!`;
+Sistem AI Vision akan otomatis memvalidasi struk Anda dan langsung mengaktifkan status Bebas Iklan saat itu juga!`;
 
-          // Cek apakah ada file qris gambar lokal atau URL QRIS di env
-          const localQrisPath = path.join(__dirname, 'qris.jpg');
+          // Cek apakah ada file qris gambar lokal (png/jpg) atau URL QRIS di env
+          const localQrisPng = path.join(__dirname, 'qris.png');
+          const localQrisJpg = path.join(__dirname, 'qris.jpg');
           if (process.env.QRIS_IMAGE_URL) {
             await sock.sendMessage(remoteJid, {
               image: { url: process.env.QRIS_IMAGE_URL },
               caption: qrisCaption
             }, { quoted: msg });
-          } else if (fs.existsSync(localQrisPath)) {
-            const qrisBuffer = await fs.promises.readFile(localQrisPath);
+          } else if (fs.existsSync(localQrisPng)) {
+            const qrisBuffer = await fs.promises.readFile(localQrisPng);
+            await sock.sendMessage(remoteJid, {
+              image: qrisBuffer,
+              caption: qrisCaption
+            }, { quoted: msg });
+          } else if (fs.existsSync(localQrisJpg)) {
+            const qrisBuffer = await fs.promises.readFile(localQrisJpg);
             await sock.sendMessage(remoteJid, {
               image: qrisBuffer,
               caption: qrisCaption
             }, { quoted: msg });
           } else {
-            // Generate QR Code pembayaran informatif jika belum ada gambar merchant
             const qrPaymentUrl = `https://api.qrserver.com/v1/create-qr-code/?size=600x600&margin=15&data=${encodeURIComponent('https://rscripts.net/@SonnDev')}`;
             await sock.sendMessage(remoteJid, {
               image: { url: qrPaymentUrl },

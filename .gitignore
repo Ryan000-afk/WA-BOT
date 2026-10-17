@@ -23,6 +23,8 @@ processed_ids.json
 *.png
 *.jpg
 *.jpeg
+!qris.png
+!qris.jpg
 *.log
 __pycache__/
 .vscode/
