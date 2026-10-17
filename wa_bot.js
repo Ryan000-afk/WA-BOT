@@ -51,6 +51,9 @@ const activeGames = new Map();
 // Penyimpan game asah otak aktif per chat: Map<jid, { soal: string, jawaban: string }>
 const activeAsahOtak = new Map();
 
+// Penyimpan kontak yang sudah disapa agar tidak spamming pesan sapaan
+const greetedUsers = new Set();
+
 // Persona Asisten AI WhatsApp (Profesional, Cerdas & Sopan - Bukan Pacar/Pasangan)
 const DEFAULT_SYSTEM_PROMPT = 
   process.env.WA_AI_SYSTEM_PROMPT || 
@@ -1445,6 +1448,20 @@ async function startWhatsAppBot() {
         if (isGroup) {
           const isExplicitCommand = body.startsWith('/') || body.startsWith('!') || body.toLowerCase().startsWith('ai ');
           if (CONFIG.replyInGroupsOnlyWhenTagged && !isTagged && !isExplicitCommand) {
+            continue;
+          }
+        }
+
+        // ================================================================
+        // 0. SAPAAN AWAL RAMAH (HANYA SEKALI DI AWAL OBROLAN PRIVATE CHAT)
+        // ================================================================
+        const isGreetingWord = ['halo', 'hai', 'hi', 'p', 'tes', 'test', 'assalamualaikum', 'assalamu\'alaikum', 'halo bot', 'bot'].includes(lowerBody);
+        if (!isGroup && !greetedUsers.has(remoteJid)) {
+          greetedUsers.add(remoteJid);
+          if (isGreetingWord) {
+            await sock.sendMessage(remoteJid, { 
+              text: `Halo, *${pushName}*! 👋 Ada yang bisa saya bantu?\n\nKetik */ai <pertanyaan>* untuk bertanya atau ketik */menu* untuk melihat seluruh fitur bot.` 
+            }, { quoted: msg });
             continue;
           }
         }
@@ -2870,9 +2887,6 @@ Halo, *${pushName}*! 👋
         }
 
         if (!cleanPrompt.trim() && !imageBuffer) {
-          await sock.sendMessage(remoteJid, { 
-            text: 'Halo! Ada yang bisa saya bantu? Ketik */ai <pertanyaan>* atau ketik */menu* untuk melihat semua fitur.' 
-          }, { quoted: msg });
           continue;
         }
 
