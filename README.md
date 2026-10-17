@@ -54,13 +54,16 @@ Bot WhatsApp cerdas bertenaga **Google Gemini AI (15-Key Rotation Pool)** dan **
 * 🏳️ **Menyerah Game (`/nyerah`)**: Menyerah dan melihat jawaban yang benar jika kesulitan.
 * 🎮 **SonnDev Roblox Script (`/roblox`)**: Temukan script game Roblox terbaik & terupdate di rscripts.net.
 
-### 💎 6. Sistem Premium & Bebas Iklan (Payment via QRIS)
-* 💎 **Info Paket (`/premium`)**: Cek paket langganan Bebas Iklan untuk Personal atau Grup.
-* 💳 **Pembayaran QRIS (`/qris` atau `/bayar`)**: Scan barcode QRIS instan dari semua E-Wallet & Mobile Banking.
-* 🔍 **Cek Status (`/cekprem`)**: Cek status dan sisa masa aktif Bebas Iklan nomor/grup.
-* 🧾 **Konfirmasi Struk (`/konfirmasi`)**: Kirim foto bukti transfer untuk verifikasi otomatis.
-* 👑 **Admin Management**: `/addprem <target> <hari>`, `/delprem <target>`, `/listprem`.
-* 📢 **Interval Iklan Otomatis**: Iklan SonnDev hanya muncul tiap **5 request di chat pribadi** dan **20 request di grup**. Member/grup Premium 100% bebas iklan.
+### 💎 6. Sistem Premium & Bebas Iklan (AI Vision Auto-Verification)
+* 💎 **Info Paket (`/premium`)**: Cek daftar 8 paket langganan Bebas Iklan:
+  * 📱 **Personal**: 5k (30 Hari), 8k (60 Hari), 12k (120 Hari), 20k (Permanen).
+  * 👥 **Grup**: 15k (30 Hari), 20k (30 Hari + Admin Menu), 25k (60 Hari + Admin Menu), 30k (60 Hari + Admin Menu + 24 Jam CS).
+* 💳 **Pembayaran QRIS (`/qris` atau `/bayar`)**: Scan barcode QRIS instan dari semua E-Wallet (Dana, OVO, GoPay, ShopeePay) & M-Banking (BCA, Mandiri, BRI, BNI, Seabank, Jago).
+* 🤖 **Auto-Verifikasi AI (`/konfirmasi`)**: Kirim foto bukti transfer/struk pembayaran dengan caption `/konfirmasi`, AI Vision otomatis memvalidasi keabsahan bukti, membaca nominal, dan langsung mengaktifkan status Bebas Iklan tanpa perlu menunggu admin manual!
+* 🔍 **Cek Status (`/cekprem`)**: Cek status, nama paket, dan sisa masa aktif Bebas Iklan nomor/grup.
+* 🛡️ **Menu Admin Grup (`/adminmenu`)**: Akses cepat menu manajemen grup bagi grup yang berlangganan paket Admin Menu.
+* 👑 **Manual Admin Override**: `/addprem <target> <hari>`, `/delprem <target>`, `/listprem`.
+* 📢 **Interval Iklan Otomatis**: Iklan promosi script Roblox SonnDev hanya muncul tiap **5 request di chat pribadi** dan **20 request di grup**. Member/grup Premium 100% bebas dari seluruh iklan.
 
 ### 👥 7. Utilitas Grup WhatsApp
 * 📢 **Hidetag (`/hidetag <pesan>`)**: Tag seluruh anggota grup dalam satu pesan.

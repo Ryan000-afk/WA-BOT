@@ -101,7 +101,7 @@ function getPremiumInfo(jid) {
   const entry = db[jid];
   if (!entry) return null;
   if (entry.expireAt === 'permanent') {
-    return { isPermanent: true, remainingStr: 'Permanen (Selamanya)' };
+    return { isPermanent: true, remainingStr: 'Permanen (Selamanya)', plan: entry.plan || 'Premium Permanen' };
   }
   const diffMs = entry.expireAt - Date.now();
   if (diffMs <= 0) {
@@ -111,7 +111,7 @@ function getPremiumInfo(jid) {
   }
   const days = Math.floor(diffMs / (24 * 3600 * 1000));
   const hours = Math.floor((diffMs % (24 * 3600 * 1000)) / (3600 * 1000));
-  return { isPermanent: false, remainingStr: `${days} hari ${hours} jam` };
+  return { isPermanent: false, remainingStr: `${days} hari ${hours} jam`, plan: entry.plan || 'Premium' };
 }
 
 function addPremium(jid, days = 30, plan = 'premium') {
@@ -364,6 +364,74 @@ Teks yang diterjemahkan: "${text}"`;
         if (res && res.text) return res.text.trim();
       } catch (e) {
         // coba model berikutnya
+      }
+    }
+  }
+  return null;
+}
+
+// ====================================================================
+// FUNGSI VERIFIKASI STRUK / BUKTI TRANSFER OTOMATIS (AI VISION)
+// ====================================================================
+async function analyzeReceiptWithGemini(imageBuffer, imageMime = 'image/jpeg') {
+  const prompt = `Periksa dan analisis gambar ini dengan seksama. Cek apakah gambar ini adalah struk transfer resmi / bukti pembayaran (seperti QRIS, Bank Transfer BCA, BRI, Mandiri, BNI, BSI, Seabank, Jago, Neo, atau E-Wallet Dana, OVO, GoPay, ShopeePay, LinkAja, dll).
+Keluarkan respon HANYA dalam format JSON valid murni (tanpa tanda kutip markdown \`\`\`json, tanpa teks pembuka atau penutup):
+{
+  "isReceipt": true,
+  "isSuccess": true,
+  "nominal": 10000,
+  "bankOrWallet": "Nama Bank / E-Wallet / QRIS",
+  "senderName": "Nama Pengirim jika ada",
+  "referenceNumber": "Nomor Referensi jika ada",
+  "reason": "keterangan singkat status bukti pembayaran"
+}
+
+Aturan verifikasi:
+1. isReceipt: bernilai true jika ini adalah struk transaksi / bukti pembayaran / mutasi / resi transfer uang. Jika bukan (misal foto orang, meme, gambar acak), isReceipt: false.
+2. isSuccess: bernilai true HANYA jika status transaksi adalah BERHASIL / SUKSES / SELESAI / TRANSAKSI BERHASIL / SUCCESS. Jika PENDING, GAGAL, BATAL, atau belum diproses, isSuccess: false.
+3. nominal: angka bulat (integer, contoh: 5000, 8000, 12000, 15000, 20000, 25000, 30000) tanpa teks Rp, titik, koma, spasi. Jika tidak tertera, isi 0.
+4. Output HANYA objek JSON.`;
+
+  const contentsPayload = [
+    {
+      role: 'user',
+      parts: [
+        { text: prompt },
+        {
+          inlineData: {
+            mimeType: (imageMime || 'image/jpeg').split(';')[0],
+            data: imageBuffer.toString('base64')
+          }
+        }
+      ]
+    }
+  ];
+
+  const totalKeys = GEMINI_KEYS.length;
+  for (let attempt = 0; attempt < totalKeys; attempt++) {
+    const kIdx = (activeKeyIndex + attempt) % totalKeys;
+    const client = new GoogleGenAI({ apiKey: GEMINI_KEYS[kIdx] });
+    for (const m of AI_MODELS) {
+      try {
+        const res = await client.models.generateContent({
+          model: m,
+          contents: contentsPayload,
+          config: {
+            temperature: 0.1
+          }
+        });
+        if (res && res.text) {
+          activeKeyIndex = kIdx;
+          const clean = res.text.replace(/```json/gi, '').replace(/```/g, '').trim();
+          try {
+            return JSON.parse(clean);
+          } catch (pe) {
+            const match = clean.match(/\{[\s\S]*\}/);
+            if (match) return JSON.parse(match[0]);
+          }
+        }
+      } catch (err) {
+        // coba model / key berikutnya
       }
     }
   }
@@ -1694,6 +1762,7 @@ Tersedia berbagai pilihan script populer untuk memaksimalkan permainan Roblox ka
         }
 
         // ================================================================
+        // ================================================================
         // INFO PAKET PREMIUM & BEBAS IKLAN (/premium atau /sewa atau /buy)
         // ================================================================
         const isPremInfoCmd = lowerBody === '/premium' || lowerBody === '/sewa' || 
@@ -1701,29 +1770,32 @@ Tersedia berbagai pilihan script populer untuk memaksimalkan permainan Roblox ka
                               lowerBody === '!premium' || lowerBody === '!sewa';
         if (isPremInfoCmd) {
           const premText = 
-`💎 *UPGRADE PREMIUM & BEBAS IKLAN* 💎
+`💎 *DAFTAR PAKET PREMIUM & BEBAS IKLAN* 💎
 
-Nikmati bot tanpa jeda iklan/promosi sama sekali!
+Nikmati bot WhatsApp tanpa jeda iklan/promosi sama sekali dan fitur eksklusif!
 
-📦 *PILIHAN PAKET BEBAS IKLAN*:
-1️⃣ *Paket Personal (Chat Pribadi)*:
-   • Rp 5.000 / 30 Hari
-   • Rp 10.000 / Permanen (Selamanya)
+📱 *PAKET PERSONAL (CHAT PRIBADI)*:
+1️⃣ *Rp 5.000* : Personal Tanpa Iklan *(30 Hari)*
+2️⃣ *Rp 8.000* : Personal Tanpa Iklan *(60 Hari)*
+3️⃣ *Rp 12.000* : Personal Tanpa Iklan *(120 Hari)*
+4️⃣ *Rp 20.000* : Personal Permanen *(Selamanya)*
 
-2️⃣ *Paket Grup (Bebas Iklan Semua Member)*:
-   • Rp 15.000 / 30 Hari
-   • Rp 25.000 / Permanen (Selamanya)
+👥 *PAKET GRUP (WHATSAPP GROUP)*:
+1️⃣ *Rp 15.000* : Group Tanpa Iklan *(30 Hari)*
+2️⃣ *Rp 20.000* : Group Tanpa Iklan + Admin Menu *(30 Hari)*
+3️⃣ *Rp 25.000* : Group Tanpa Iklan + Admin Menu *(60 Hari)*
+4️⃣ *Rp 30.000* : Group Tanpa Iklan + Admin Menu + 24 Jam CS *(60 Hari)*
 
 💳 *METODE PEMBAYARAN: QRIS (Semua Pembayaran)*
-Dapat dibayar via:
-• E-Wallet: Dana, OVO, GoPay, ShopeePay, LinkAja, dll.
-• M-Banking: BCA, Mandiri, BRI, BNI, Seabank, Neo, dll.
+• E-Wallet: Dana, OVO, GoPay, ShopeePay, LinkAja, AstraPay, dll.
+• M-Banking: BCA, Mandiri, BRI, BNI, BSI, Seabank, Neo, Jago, dll.
 
-📲 *CARA PEMBAYARAN*:
-1. Ketik */qris* atau */bayar* untuk menampilkan Barcode QRIS.
-2. Scan & selesaikan pembayaran sesuai nominal paket.
-3. Kirim foto struk/bukti transfer ke chat ini dengan caption */konfirmasi*.
-Status Bebas Iklan akan langsung diaktifkan!`;
+⚡ *VERIFIKASI OTOMATIS VIA AI (INSTAN)*:
+1. Ketik */qris* atau */bayar* untuk menampilkan kode QRIS.
+2. Scan QRIS dan bayar sesuai nominal paket yang diinginkan.
+3. Kirim / balas foto bukti transfer dengan caption:
+   👉 */konfirmasi*
+4. Bot akan otomatis menganalisis struk via AI Vision dan langsung mengaktifkan paket Anda tanpa harus menunggu admin!`;
 
           await sock.sendMessage(remoteJid, { text: premText }, { quoted: msg });
           continue;
@@ -1740,19 +1812,26 @@ Status Bebas Iklan akan langsung diaktifkan!`;
 
 Silakan scan kode QRIS di atas untuk melakukan pembayaran:
 ✅ *Mendukung Semua Pembayaran*:
-• E-Wallet: Dana, OVO, GoPay, ShopeePay, LinkAja, dll.
-• M-Banking: BCA, Mandiri, BRI, BNI, Seabank, Neo, Jago, dll.
+• E-Wallet: Dana, OVO, GoPay, ShopeePay, LinkAja, AstraPay, dll.
+• M-Banking: BCA, Mandiri, BRI, BNI, BSI, Seabank, Neo, Jago, dll.
 
-📋 *PILIHAN NOMINAL*:
-• Personal 30 Hari: *Rp 5.000*
-• Personal Permanen: *Rp 10.000*
-• Grup 30 Hari: *Rp 15.000*
-• Grup Permanen: *Rp 25.000*
+📋 *PILIHAN PAKET & NOMINAL*:
+📱 *Personal (Chat Pribadi)*:
+• Rp 5.000 : Tanpa Iklan 30 Hari
+• Rp 8.000 : Tanpa Iklan 60 Hari
+• Rp 12.000 : Tanpa Iklan 120 Hari
+• Rp 20.000 : Tanpa Iklan Permanen (Selamanya)
 
-📝 *KONFIRMASI PEMBAYARAN*:
+👥 *Grup (WhatsApp Group)*:
+• Rp 15.000 : Tanpa Iklan 30 Hari
+• Rp 20.000 : Tanpa Iklan + Admin Menu 30 Hari
+• Rp 25.000 : Tanpa Iklan + Admin Menu 60 Hari
+• Rp 30.000 : Tanpa Iklan + Admin Menu + 24 Jam CS 60 Hari
+
+⚡ *AKTIVASI OTOMATIS (AI VISION)*:
 Setelah transfer, kirimkan foto struk/bukti transfer ke bot dengan caption:
 👉 */konfirmasi*
-Bot akan memverifikasi dan mengaktifkan status Bebas Iklan Anda!`;
+Sistem AI Vision akan langsung memverifikasi struk Anda dan mengaktifkan status Bebas Iklan dalam hitungan detik!`;
 
           // Cek apakah ada file qris gambar lokal atau URL QRIS di env
           const localQrisPath = path.join(__dirname, 'qris.jpg');
@@ -1790,7 +1869,7 @@ Bot akan memverifikasi dan mengaktifkan status Bebas Iklan Anda!`;
 
           if (premInfo) {
             await sock.sendMessage(remoteJid, {
-              text: `🌟 *STATUS BEBAS IKLAN: AKTIF* 🌟\n\n🎯 *Target*: ${isGroup ? 'Grup Ini' : pushName}\n⏳ *Masa Aktif*: *${premInfo.remainingStr}*\n\n_Nomor/Grup ini bersih dari seluruh pesan promosi & iklan!_ ✨`
+              text: `🌟 *STATUS BEBAS IKLAN: AKTIF* 🌟\n\n🎯 *Target*: ${isGroup ? 'Grup Ini' : pushName}\n📦 *Paket*: ${premInfo.plan || 'Premium'}\n⏳ *Masa Aktif*: *${premInfo.remainingStr}*\n\n_Nomor/Grup ini bersih dari seluruh pesan promosi & iklan!_ ✨`
             }, { quoted: msg });
           } else {
             await sock.sendMessage(remoteJid, {
@@ -1801,7 +1880,7 @@ Bot akan memverifikasi dan mengaktifkan status Bebas Iklan Anda!`;
         }
 
         // ================================================================
-        // KONFIRMASI BUKTI PEMBAYARAN (/konfirmasi atau /bukti)
+        // KONFIRMASI BUKTI PEMBAYARAN OTOMATIS AI (/konfirmasi atau /bukti)
         // ================================================================
         const isConfirmCmd = lowerBody.startsWith('/konfirmasi') || lowerBody.startsWith('/bukti') ||
                              lowerBody.startsWith('!konfirmasi') || lowerBody.startsWith('!bukti');
@@ -1811,19 +1890,145 @@ Bot akan memverifikasi dan mengaktifkan status Bebas Iklan Anda!`;
 
           if (!media || !media.isImage) {
             await sock.sendMessage(remoteJid, {
-              text: '⚠️ *Kirim foto struk/bukti transfer* dengan caption */konfirmasi* atau balas (reply) foto bukti transfer dengan ketik */konfirmasi*.'
+              text: '⚠️ *Kirim foto struk/bukti transfer* dengan caption */konfirmasi* atau *balas (reply)* foto bukti transfer dengan ketik */konfirmasi*.'
             }, { quoted: msg });
             continue;
           }
 
           await sock.sendMessage(remoteJid, {
-            text: `✅ *BUKTI PEMBAYARAN DITERIMA!*
+            text: '⏳ *Sedang menganalisis dan memverifikasi struk pembayaran Anda dengan AI Vision... Mohon tunggu sebentar.*'
+          }, { quoted: msg });
+          await sock.sendPresenceUpdate('composing', remoteJid);
 
-Terima kasih @${sender.split('@')[0]}! Bukti pembayaran Anda telah tercatat dalam sistem kami.
-Admin akan segera memverifikasi struk Anda dan mengaktifkan status Bebas Iklan.
+          let receiptData = null;
+          try {
+            receiptData = await analyzeReceiptWithGemini(media.buffer, media.mimeType);
+          } catch (aiErr) {
+            console.error('[RECEIPT AI ERROR]', aiErr);
+          }
+          await sock.sendPresenceUpdate('paused', remoteJid);
 
-Silakan cek status Anda secara berkala dengan ketik:
-👉 */cekprem*`,
+          if (!receiptData || !receiptData.isReceipt) {
+            await sock.sendMessage(remoteJid, {
+              text: '❌ *BUKTI PEMBAYARAN TIDAK TERDETEKSI*\n\nGambar yang Anda kirim tidak terbaca sebagai struk atau bukti transfer pembayaran yang sah.\nPastikan foto struk terlihat jelas, tidak buram, dan menampilkan informasi nominal serta status transaksi.'
+            }, { quoted: msg });
+            continue;
+          }
+
+          if (!receiptData.isSuccess) {
+            await sock.sendMessage(remoteJid, {
+              text: `⚠️ *TRANSAKSI BELUM BERHASIL*\n\nStatus transaksi pada bukti transfer belum berstatus sukses/berhasil (${receiptData.reason || 'Pending/Gagal'}).\nMohon selesaikan proses pembayaran terlebih dahulu lalu kirimkan bukti transfer yang sah.`
+            }, { quoted: msg });
+            continue;
+          }
+
+          const nominal = parseInt(receiptData.nominal) || 0;
+          if (nominal < 5000) {
+            await sock.sendMessage(remoteJid, {
+              text: `⚠️ *NOMINAL KURANG DARI MINIMUM*\n\nNominal yang terbaca pada struk: *Rp ${nominal.toLocaleString('id-ID')}*.\nMinimum paket adalah Rp 5.000. Hubungi admin jika terdapat kesalahan dalam pembacaan gambar.`
+            }, { quoted: msg });
+            continue;
+          }
+
+          // Menentukan paket & durasi berdasarkan nominal dan konteks (Grup vs Personal)
+          let targetJid = isGroup ? remoteJid : sender;
+          let planName = '';
+          let days = 30;
+          let extraNote = '';
+
+          if (isGroup) {
+            // Konfirmasi di dalam grup WhatsApp
+            if (nominal >= 30000) {
+              planName = 'Group Tanpa Iklan + Admin Menu + 24 Jam CS (60 Hari)';
+              days = 60;
+              extraNote = '🌟 *Bonus*: Fitur Admin Menu & CS 24 Jam aktif di grup ini!';
+            } else if (nominal >= 25000) {
+              planName = 'Group Tanpa Iklan + Admin Menu (60 Hari)';
+              days = 60;
+              extraNote = '🌟 *Bonus*: Fitur Admin Menu aktif di grup ini!';
+            } else if (nominal >= 20000) {
+              planName = 'Group Tanpa Iklan + Admin Menu (30 Hari)';
+              days = 30;
+              extraNote = '🌟 *Bonus*: Fitur Admin Menu aktif di grup ini!';
+            } else if (nominal >= 15000) {
+              planName = 'Group Tanpa Iklan (30 Hari)';
+              days = 30;
+            } else if (nominal >= 12000) {
+              targetJid = sender;
+              planName = 'Personal Tanpa Iklan (120 Hari)';
+              days = 120;
+              extraNote = '💡 *Catatan*: Paket diaktifkan untuk akun personal Anda.';
+            } else if (nominal >= 8000) {
+              targetJid = sender;
+              planName = 'Personal Tanpa Iklan (60 Hari)';
+              days = 60;
+              extraNote = '💡 *Catatan*: Paket diaktifkan untuk akun personal Anda.';
+            } else {
+              targetJid = sender;
+              planName = 'Personal Tanpa Iklan (30 Hari)';
+              days = 30;
+              extraNote = '💡 *Catatan*: Paket diaktifkan untuk akun personal Anda.';
+            }
+          } else {
+            // Konfirmasi di Chat Pribadi (DM)
+            if (nominal >= 30000) {
+              planName = 'Group 60 Hari (Tanpa Iklan + Admin Menu + 24 Jam CS) / Personal Permanen';
+              days = 'permanent';
+              extraNote = '👑 *Akun Anda kini Personal Permanen!* Untuk mengaktifkan paket grup, silakan masukkan bot ke grup dan kirim struk dengan /konfirmasi di dalam grup.';
+            } else if (nominal >= 25000) {
+              planName = 'Group 60 Hari (Tanpa Iklan + Admin Menu) / Personal Permanen';
+              days = 'permanent';
+              extraNote = '👑 *Akun Anda kini Personal Permanen!* Untuk mengaktifkan paket grup, kirim struk dengan /konfirmasi di dalam grup.';
+            } else if (nominal >= 20000) {
+              planName = 'Personal Tanpa Iklan Permanen (Selamanya)';
+              days = 'permanent';
+            } else if (nominal >= 15000) {
+              planName = 'Group Tanpa Iklan 30 Hari / Personal 150 Hari';
+              days = 150;
+              extraNote = '💡 Untuk mengaktifkan di grup WhatsApp, kirimkan juga struk ini di grup dengan /konfirmasi.';
+            } else if (nominal >= 12000) {
+              planName = 'Personal Tanpa Iklan (120 Hari)';
+              days = 120;
+            } else if (nominal >= 8000) {
+              planName = 'Personal Tanpa Iklan (60 Hari)';
+              days = 60;
+            } else {
+              planName = 'Personal Tanpa Iklan (30 Hari)';
+              days = 30;
+            }
+          }
+
+          // Eksekusi aktivasi otomatis
+          addPremium(targetJid, days, planName);
+
+          // Jika paket grup diaktifkan di grup, berikan bonus personal juga kepada pembeli
+          if (targetJid === remoteJid && isGroup) {
+            addPremium(sender, days, `Bonus Pengirim: ${planName}`);
+          }
+
+          const formattedNominal = new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(nominal);
+          const targetDisplay = targetJid === remoteJid && isGroup ? 'Grup Ini' : `@${sender.split('@')[0]}`;
+          const activeDurationStr = days === 'permanent' ? '✨ *PERMANEN (SELAMANYA)* ✨' : `*${days} Hari*`;
+
+          const successText = 
+`🎉 *PEMBAYARAN TERVERIFIKASI OTOMATIS OLEH AI!* 🎉
+
+Alhamdulillah, bukti transfer Anda telah berhasil diverifikasi secara instan oleh AI Vision. Akses Bebas Iklan langsung aktif saat ini juga!
+
+📋 *RINCIAN TRANSAKSI*:
+✅ *Status*: BERHASIL & AKTIF
+💰 *Nominal Terbaca*: *${formattedNominal}*
+🏦 *Metode / Bank*: ${receiptData.bankOrWallet || 'QRIS / Transfer Bank'}
+📦 *Paket*: *${planName}*
+⏳ *Masa Aktif*: ${activeDurationStr}
+🎯 *Target*: ${targetDisplay}
+${extraNote ? '\n' + extraNote : ''}
+
+Nikmati bot tanpa jeda iklan promosi! Ketik */cekprem* kapan saja untuk memeriksa status masa aktif.
+Terima kasih banyak atas dukungannya! 💖`;
+
+          await sock.sendMessage(remoteJid, {
+            text: successText,
             mentions: [sender]
           }, { quoted: msg });
 
@@ -1832,13 +2037,43 @@ Silakan cek status Anda secara berkala dengan ketik:
             for (const own of OWNER_NUMBERS) {
               const ownJid = own + '@s.whatsapp.net';
               await sock.sendMessage(ownJid, {
-                text: `🔔 *NOTIFIKASI PEMBAYARAN BARU* 🔔\n\n👤 *Pengirim*: @${sender.split('@')[0]} (${pushName})\n📍 *Chat*: ${remoteJid}\n⏰ *Waktu*: ${new Date().toLocaleString('id-ID')}\n\nKetik */addprem ${sender} 30* untuk mengaktifkan 30 hari.`,
+                text: `🔔 *[AUTO-VERIFIKASI PEMBAYARAN SUKSES]* 🔔\n\n👤 *Pengirim*: @${sender.split('@')[0]} (${pushName})\n📍 *Chat*: ${remoteJid}\n💰 *Nominal*: ${formattedNominal}\n🏦 *Bank/E-Wallet*: ${receiptData.bankOrWallet || 'QRIS'}\n📦 *Paket*: ${planName}\n⏳ *Durasi*: ${days === 'permanent' ? 'Permanen' : days + ' Hari'}\n🎯 *Target*: ${targetJid}`,
                 mentions: [sender]
               });
             }
           } catch (ownErr) {
             // abaikan
           }
+          continue;
+        }
+
+        // ================================================================
+        // MENU ADMIN KHUSUS GRUP (/adminmenu atau /menuadmin)
+        // ================================================================
+        const isAdminMenuCmd = lowerBody === '/adminmenu' || lowerBody === '/menuadmin' ||
+                               lowerBody === '!adminmenu' || lowerBody === '!menuadmin';
+        if (isAdminMenuCmd) {
+          const adminText = 
+`🛡️ *MENU ADMIN GRUP* 🛡️
+
+Berikut adalah kumpulan perintah khusus admin untuk mengelola grup Anda dengan praktis:
+
+👥 *MANAJEMEN ANGGOTA*:
+• */kick @tag* : Mengeluarkan anggota dari grup (bot harus admin)
+• */tagadmin [pesan]* : Memanggil seluruh admin grup sekaligus
+• */hidetag [pesan]* : Tag pengumuman ke seluruh member grup
+• */totag [pesan]* : Mention rapi seluruh member grup
+
+⚙️ *PENGATURAN GRUP*:
+• */group open* / */group buka* : Buka grup (semua member bisa chat)
+• */group close* / */group tutup* : Tutup grup (hanya admin yang bisa chat)
+• */antilink on* / */antilink off* : Aktifkan/nonaktifkan proteksi anti-link
+• */linkgc* : Dapatkan tautan undangan grup
+• */revoke* : Reset/ganti tautan undangan grup
+
+💡 *Tips*: Pastikan bot sudah diangkat menjadi Admin Grup agar semua fitur di atas berjalan maksimal!`;
+
+          await sock.sendMessage(remoteJid, { text: adminText }, { quoted: msg });
           continue;
         }
 
