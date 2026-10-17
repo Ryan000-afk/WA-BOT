@@ -1,0 +1,352 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Instagram AI Chatbot Dashboard</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+    body {
+      font-family: 'Plus Jakarta Sans', sans-serif;
+      background-color: #0d1117;
+      color: #e6edf3;
+      padding: 24px;
+      line-height: 1.5;
+    }
+    .container {
+      max-width: 1000px;
+      margin: 0 auto;
+    }
+    header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding-bottom: 20px;
+      border-bottom: 1px solid #30363d;
+      margin-bottom: 24px;
+    }
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .brand svg {
+      width: 36px;
+      height: 36px;
+      fill: url(#ig-gradient);
+    }
+    h1 {
+      font-size: 24px;
+      font-weight: 700;
+    }
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 12px;
+      border-radius: 9999px;
+      font-size: 13px;
+      font-weight: 600;
+    }
+    .badge.online {
+      background-color: rgba(46, 160, 67, 0.15);
+      color: #3fb950;
+      border: 1px solid rgba(46, 160, 67, 0.4);
+    }
+    .badge.offline {
+      background-color: rgba(248, 81, 73, 0.15);
+      color: #f85149;
+      border: 1px solid rgba(248, 81, 73, 0.4);
+    }
+    .badge.connecting {
+      background-color: rgba(210, 153, 34, 0.15);
+      color: #d29922;
+      border: 1px solid rgba(210, 153, 34, 0.4);
+    }
+    .dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background-color: currentColor;
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+    .card {
+      background: #161b22;
+      border: 1px solid #30363d;
+      border-radius: 12px;
+      padding: 20px;
+    }
+    .card h3 {
+      font-size: 14px;
+      color: #8b949e;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 8px;
+    }
+    .card .val {
+      font-size: 26px;
+      font-weight: 700;
+      color: #f0f6fc;
+    }
+    .section-title {
+      font-size: 18px;
+      font-weight: 600;
+      margin-bottom: 12px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .logs-box {
+      background: #090d13;
+      border: 1px solid #30363d;
+      border-radius: 12px;
+      padding: 16px;
+      font-family: 'Consolas', 'Courier New', monospace;
+      font-size: 13px;
+      height: 320px;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .log-item {
+      display: flex;
+      gap: 12px;
+      color: #c9d1d9;
+    }
+    .log-time {
+      color: #6e7681;
+      flex-shrink: 0;
+    }
+    .log-info { color: #58a6ff; }
+    .log-success { color: #3fb950; }
+    .log-warn { color: #d29922; }
+    .log-error { color: #f85149; }
+    .test-box {
+      margin-top: 24px;
+      background: #161b22;
+      border: 1px solid #30363d;
+      border-radius: 12px;
+      padding: 20px;
+    }
+    .input-group {
+      display: flex;
+      gap: 8px;
+      margin-top: 12px;
+    }
+    input[type="text"] {
+      flex: 1;
+      background: #0d1117;
+      border: 1px solid #30363d;
+      color: #e6edf3;
+      padding: 10px 14px;
+      border-radius: 8px;
+      font-size: 14px;
+      outline: none;
+    }
+    input[type="text"]:focus {
+      border-color: #58a6ff;
+    }
+    button {
+      background: #238636;
+      color: white;
+      border: none;
+      padding: 10px 20px;
+      border-radius: 8px;
+      font-weight: 600;
+      font-size: 14px;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+    button:hover {
+      background: #2ea043;
+    }
+    button:disabled {
+      background: #21262d;
+      color: #6e7681;
+      cursor: not-allowed;
+    }
+    .test-output {
+      margin-top: 12px;
+      padding: 12px;
+      border-radius: 8px;
+      background: #0d1117;
+      border: 1px solid #30363d;
+      font-size: 14px;
+      display: none;
+    }
+  </style>
+  <svg width="0" height="0">
+    <radialGradient id="ig-gradient" r="150%" cx="30%" cy="107%">
+      <stop stop-color="#fdf497" offset="0%" />
+      <stop stop-color="#fdf497" offset="5%" />
+      <stop stop-color="#fd5949" offset="45%" />
+      <stop stop-color="#d6249f" offset="60%" />
+      <stop stop-color="#285AEB" offset="90%" />
+    </radialGradient>
+  </svg>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <div class="brand">
+        <svg viewBox="0 0 24 24">
+          <path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zm0-2.163c-3.259 0-3.667.014-4.947.072-4.358.2-6.78 2.618-6.98 6.98-.059 1.281-.073 1.689-.073 4.948 0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98 1.281.058 1.689.072 4.948.072 3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98-1.281-.059-1.69-.073-4.949-.073zm0 5.838c-3.403 0-6.162 2.759-6.162 6.162s2.759 6.163 6.162 6.163 6.162-2.759 6.162-6.163c0-3.403-2.759-6.162-6.162-6.162zm0 10.162c-2.209 0-4-1.79-4-4 0-2.209 1.791-4 4-4s4 1.791 4 4c0 2.21-1.791 4-4 4zm6.406-11.845c-.796 0-1.441.645-1.441 1.44s.645 1.44 1.441 1.44c.795 0 1.439-.645 1.439-1.44s-.644-1.44-1.439-1.44z"/>
+        </svg>
+        <div>
+          <h1>Instagram AI Assistant</h1>
+          <p style="font-size: 13px; color: #8b949e;">Powered by Google Gemini & Node.js</p>
+        </div>
+      </div>
+      <div id="statusBadge" class="badge connecting">
+        <span class="dot"></span>
+        <span id="statusText">Memeriksa status...</span>
+      </div>
+    </header>
+
+    <div class="grid">
+      <div class="card">
+        <h3>Akun Instagram</h3>
+        <div class="val" id="igAccount" style="font-size: 18px;">-</div>
+      </div>
+      <div class="card">
+        <h3>Pesan Dibalas</h3>
+        <div class="val" id="replyCount">0</div>
+      </div>
+      <div class="card">
+        <h3>Interval Pengecekan</h3>
+        <div class="val" id="pollInterval" style="font-size: 18px;">10 detik</div>
+      </div>
+    </div>
+
+    <div>
+      <div class="section-title">
+        <span>Aktivitas & Log Percakapan</span>
+        <button id="clearLogsBtn" style="padding: 4px 10px; font-size: 12px; background: #30363d;">Bersihkan Tampilan</button>
+      </div>
+      <div class="logs-box" id="logsBox">
+        <div class="log-item">
+          <span class="log-time">[Memulai]</span>
+          <span>Menghubungkan ke server bot...</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="test-box">
+      <h3>Uji Coba Respon AI (Gemini)</h3>
+      <p style="font-size: 13px; color: #8b949e; margin-top: 4px;">Kirimkan pesan simulasi untuk melihat bagaimana AI akan membalas pesan calon follower/klien.</p>
+      <div class="input-group">
+        <input type="text" id="testInput" placeholder="Ketik pesan tes (misal: Halo, bisakah Anda jelaskan layanan Anda?)...">
+        <button id="testBtn">Kirim Tes</button>
+      </div>
+      <div class="test-output" id="testOutput"></div>
+    </div>
+  </div>
+
+  <script>
+    const statusBadge = document.getElementById('statusBadge');
+    const statusText = document.getElementById('statusText');
+    const igAccount = document.getElementById('igAccount');
+    const replyCount = document.getElementById('replyCount');
+    const logsBox = document.getElementById('logsBox');
+    const testInput = document.getElementById('testInput');
+    const testBtn = document.getElementById('testBtn');
+    const testOutput = document.getElementById('testOutput');
+    const clearLogsBtn = document.getElementById('clearLogsBtn');
+
+    async function fetchStatus() {
+      try {
+        const res = await fetch('/api/status');
+        const data = await res.json();
+        
+        if (data.status === 'online') {
+          statusBadge.className = 'badge online';
+          statusText.innerText = 'Online & Mendengarkan';
+          igAccount.innerText = '@' + data.username;
+        } else if (data.status === 'error') {
+          statusBadge.className = 'badge offline';
+          statusText.innerText = 'Error / Belum Login';
+          igAccount.innerText = data.error || 'Gagal login';
+        } else {
+          statusBadge.className = 'badge connecting';
+          statusText.innerText = 'Sedang Menghubungkan...';
+          igAccount.innerText = data.username ? '@' + data.username : 'Menunggu...';
+        }
+        
+        replyCount.innerText = data.repliedCount || 0;
+        
+        if (Array.isArray(data.logs)) {
+          renderLogs(data.logs);
+        }
+      } catch (err) {
+        statusBadge.className = 'badge offline';
+        statusText.innerText = 'Server Offline';
+      }
+    }
+
+    function renderLogs(logs) {
+      logsBox.innerHTML = '';
+      logs.forEach(log => {
+        const div = document.createElement('div');
+        div.className = 'log-item';
+        
+        let typeClass = 'log-info';
+        if (log.type === 'success') typeClass = 'log-success';
+        if (log.type === 'warn') typeClass = 'log-warn';
+        if (log.type === 'error') typeClass = 'log-error';
+        
+        div.innerHTML = `<span class="log-time">[${log.time}]</span> <span class="${typeClass}">${log.message}</span>`;
+        logsBox.appendChild(div);
+      });
+      logsBox.scrollTop = logsBox.scrollHeight;
+    }
+
+    testBtn.addEventListener('click', async () => {
+      const msg = testInput.value.trim();
+      if (!msg) return;
+      testBtn.disabled = true;
+      testBtn.innerText = 'Memproses...';
+      testOutput.style.display = 'block';
+      testOutput.innerHTML = '<span style="color: #8b949e;">Menghubungi Gemini AI...</span>';
+      
+      try {
+        const res = await fetch('/api/test-ai', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ message: msg })
+        });
+        const data = await res.json();
+        if (data.reply) {
+          testOutput.innerHTML = `<strong>Balasan AI:</strong><br>${data.reply.replace(/\n/g, '<br>')}`;
+        } else {
+          testOutput.innerHTML = `<span style="color: #f85149;">Error: ${data.error || 'Gagal'}</span>`;
+        }
+      } catch (e) {
+        testOutput.innerHTML = `<span style="color: #f85149;">Gagal menghubungi server.</span>`;
+      } finally {
+        testBtn.disabled = false;
+        testBtn.innerText = 'Kirim Tes';
+      }
+    });
+
+    clearLogsBtn.addEventListener('click', () => {
+      logsBox.innerHTML = '<div class="log-item"><span class="log-time">[Info]</span><span>Log layar dibersihkan.</span></div>';
+    });
+
+    setInterval(fetchStatus, 3000);
+    fetchStatus();
+  </script>
+</body>
+</html>

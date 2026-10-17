@@ -1,0 +1,8 @@
+node_modules
+npm-debug.log
+.git
+.github
+*.png
+browser_profile
+bot_edge_profile
+__pycache__

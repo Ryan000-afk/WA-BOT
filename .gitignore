@@ -1,0 +1,29 @@
+# Environment variables (SANGAT PENTING: Jangan upload API key atau password ke GitHub)
+.env
+.env.*
+!.env.example
+
+# WhatsApp Session Auth (Jangan upload sesi WhatsApp)
+wa_session/
+
+# Dependencies
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Browser Profiles & Playwright
+browser_profile/
+bot_edge_profile/
+playwright_cookies.json
+session.json
+processed_ids.json
+
+# Screenshots & Cache
+*.png
+*.jpg
+*.jpeg
+*.log
+__pycache__/
+.vscode/
+.idea/
