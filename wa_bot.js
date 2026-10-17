@@ -27,7 +27,7 @@ const rawKeys = [
   process.env.GEMINI_API_KEY
 ]
   .map(k => (k || '').trim())
-  .filter(k => k && k.startsWith('AIzaSy'));
+  .filter(k => k && k.length > 20 && !k.includes(' '));
 
 // Hilangkan duplikat key
 const GEMINI_KEYS = Array.from(new Set(rawKeys));
@@ -41,7 +41,7 @@ if (GEMINI_KEYS.length === 0) {
 console.log(`[INFO] Berhasil memuat ${GEMINI_KEYS.length} Gemini API Key ke dalam Pool Rotasi.`);
 
 let activeKeyIndex = 0;
-const AI_MODELS = ['gemini-3.7-flash', 'gemini-3.1-flash-lite', 'gemini-3.5-flash-lite'];
+const AI_MODELS = ['gemini-3.8-flash', 'gemini-3.7-flash', 'gemini-3.1-flash-lite', 'gemini-3.5-flash-lite'];
 
 // Set penyimpan grup yang mengaktifkan Anti-Link
 const antilinkGroups = new Set();
