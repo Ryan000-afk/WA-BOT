@@ -11,6 +11,7 @@ const {
   useMultiFileAuthState,
   DisconnectReason,
   fetchLatestBaileysVersion,
+  downloadMediaMessage,
   delay
 } = require('@whiskeysockets/baileys');
 const { GoogleGenAI } = require('@google/genai');
@@ -42,6 +43,9 @@ console.log(`[INFO] Berhasil memuat ${GEMINI_KEYS.length} Gemini API Key ke dala
 let activeKeyIndex = 0;
 const AI_MODELS = ['gemini-3.7-flash', 'gemini-3.1-flash-lite', 'gemini-3.5-flash-lite'];
 
+// Set penyimpan grup yang mengaktifkan Anti-Link
+const antilinkGroups = new Set();
+
 // Persona Asisten AI WhatsApp (Profesional, Cerdas & Sopan - Bukan Pacar/Pasangan)
 const DEFAULT_SYSTEM_PROMPT = 
   process.env.WA_AI_SYSTEM_PROMPT || 
@@ -57,7 +61,12 @@ const DEFAULT_SYSTEM_PROMPT =
   5. Unduh Threads (/download.th <link>)
   6. Unduh YouTube (/download.yt <link>)
   7. Unduh Twitter / X (/download.x <link>)
-  8. Cek Status VPS (/status) dan Kecepatan Respon (/ping)
+  8. Unduh Audio Musik MP3 (/mp3 <judul/link>)
+  9. Pembuat Stiker Otomatis (/s dari foto/video)
+  10. Text to Speech Suara VN (/tts <teks>)
+  11. Penerjemah AI Multibahasa (/tr <bahasa> <teks>)
+  12. AI Vision (Menganalisis isi foto/gambar yang dikirim)
+  13. Utilitas Grup (/hidetag <pesan>, /antilink on/off)
 - Pengguna juga bisa langsung mengirimkan/menempelkan tautan link langsung ke chat tanpa harus mengetik perintah!
 - Gunakan formatting WhatsApp yang nyaman dibaca (*bold*, _italic_, daftar poin).
 - Jika pengguna bertanya dalam bahasa lain, jawablah dalam bahasa yang sama dengan profesional.`;
@@ -92,9 +101,9 @@ function clearChatHistory(jid) {
 }
 
 // ====================================================================
-// FUNGSI GENERATE JAWABAN GEMINI AI DENGAN FAILOVER MULTI-KEY
+// FUNGSI GENERATE JAWABAN GEMINI AI (MULTIMODAL: TEKS & GAMBAR)
 // ====================================================================
-async function generateAiReply(jid, userMessage, senderName = 'Teman') {
+async function generateAiReply(jid, userMessage, senderName = 'Teman', imageBuffer = null, imageMime = 'image/jpeg') {
   const history = getChatHistory(jid);
 
   let prompt = '';
@@ -103,9 +112,29 @@ async function generateAiReply(jid, userMessage, senderName = 'Teman') {
     for (const h of history) {
       prompt += `${h.role === 'user' ? senderName : 'AI'}: ${h.text}\n`;
     }
-    prompt += `\nPesan baru dari ${senderName}: "${userMessage}"\nBalasanmu:`;
+    prompt += `\nPesan baru dari ${senderName}: "${userMessage || 'Jelaskan gambar ini'}"\nBalasanmu:`;
   } else {
-    prompt = userMessage;
+    prompt = userMessage || 'Jelaskan gambar ini secara lengkap dan informatif.';
+  }
+
+  let contentsPayload;
+  if (imageBuffer) {
+    contentsPayload = [
+      {
+        role: 'user',
+        parts: [
+          { text: prompt },
+          {
+            inlineData: {
+              mimeType: imageMime || 'image/jpeg',
+              data: imageBuffer.toString('base64')
+            }
+          }
+        ]
+      }
+    ];
+  } else {
+    contentsPayload = prompt;
   }
 
   let replyText = null;
@@ -123,7 +152,7 @@ async function generateAiReply(jid, userMessage, senderName = 'Teman') {
       try {
         const response = await client.models.generateContent({
           model: modelName,
-          contents: prompt,
+          contents: contentsPayload,
           config: {
             systemInstruction: DEFAULT_SYSTEM_PROMPT,
             temperature: 0.7,
@@ -164,10 +193,163 @@ async function generateAiReply(jid, userMessage, senderName = 'Teman') {
   }
 
   // Simpan riwayat setelah berhasil
-  addChatHistory(jid, 'user', userMessage);
+  addChatHistory(jid, 'user', userMessage || '[Kirim Gambar]');
   addChatHistory(jid, 'model', replyText);
 
   return replyText;
+}
+
+// ====================================================================
+// FUNGSI TRANSLATOR DENGAN GEMINI AI
+// ====================================================================
+async function translateText(targetLang, text) {
+  const prompt = `Terjemahkan kalimat berikut secara alami dan akurat ke dalam bahasa target [${targetLang}].
+Berikan HANYA teks hasil terjemahannya saja, tanpa kata pengantar, tanpa tanda petik pembuka/penutup, dan tanpa penjelasan tambahan.
+Teks yang diterjemahkan: "${text}"`;
+
+  const totalKeys = GEMINI_KEYS.length;
+  for (let attempt = 0; attempt < totalKeys; attempt++) {
+    const kIdx = (activeKeyIndex + attempt) % totalKeys;
+    const client = new GoogleGenAI({ apiKey: GEMINI_KEYS[kIdx] });
+    for (const m of AI_MODELS) {
+      try {
+        const res = await client.models.generateContent({
+          model: m,
+          contents: prompt
+        });
+        if (res && res.text) return res.text.trim();
+      } catch (e) {
+        // coba model berikutnya
+      }
+    }
+  }
+  return null;
+}
+
+// ====================================================================
+// FUNGSI TEXT TO SPEECH (TTS GOOGLE NATIVE STREAM)
+// ====================================================================
+async function generateTtsAudio(text, lang = 'id') {
+  const cleanText = text.substring(0, 200).trim();
+  const url = `https://translate.google.com/translate_tts?ie=UTF-8&q=${encodeURIComponent(cleanText)}&tl=${lang}&client=tw-ob`;
+  const res = await fetch(url, {
+    headers: {
+      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36'
+    }
+  });
+  if (!res.ok) throw new Error(`Status TTS ${res.status}`);
+  return Buffer.from(await res.arrayBuffer());
+}
+
+// ====================================================================
+// FUNGSI EKSTRAKSI MEDIA DARI PESAN (LANGSUNG ATAU REPLY/QUOTE)
+// ====================================================================
+async function extractMedia(msg) {
+  let targetMsg = msg;
+  const quoted = msg.message?.extendedTextMessage?.contextInfo?.quotedMessage;
+
+  if (quoted && (quoted.imageMessage || quoted.videoMessage || quoted.stickerMessage || quoted.audioMessage)) {
+    targetMsg = {
+      key: {
+        remoteJid: msg.key.remoteJid,
+        id: msg.message.extendedTextMessage.contextInfo.stanzaId,
+        participant: msg.message.extendedTextMessage.contextInfo.participant
+      },
+      message: quoted
+    };
+  }
+
+  const isImage = !!targetMsg.message?.imageMessage;
+  const isVideo = !!targetMsg.message?.videoMessage;
+  const isSticker = !!targetMsg.message?.stickerMessage;
+  const isAudio = !!targetMsg.message?.audioMessage;
+
+  if (!isImage && !isVideo && !isSticker && !isAudio) return null;
+
+  try {
+    const buffer = await downloadMediaMessage(
+      targetMsg,
+      'buffer',
+      {},
+      {
+        logger: pino({ level: 'silent' })
+      }
+    );
+
+    return {
+      buffer,
+      isImage,
+      isVideo,
+      isSticker,
+      isAudio,
+      mimeType: targetMsg.message?.imageMessage?.mimetype ||
+                targetMsg.message?.videoMessage?.mimetype ||
+                targetMsg.message?.audioMessage?.mimetype ||
+                'image/jpeg'
+    };
+  } catch (err) {
+    console.warn('[EXTRACT MEDIA ERROR]', err.message);
+    return null;
+  }
+}
+
+// ====================================================================
+// FUNGSI KONVERSI MEDIA MENJADI STIKER WEBP VIA FFMPEG
+// ====================================================================
+function bufferToWebpSticker(inputBuffer, isVideo = false) {
+  return new Promise(async (resolve, reject) => {
+    const tempDir = os.tmpdir();
+    const id = 'stk_' + crypto.randomBytes(6).toString('hex');
+    const inputPath = path.join(tempDir, `${id}.${isVideo ? 'mp4' : 'jpg'}`);
+    const outputPath = path.join(tempDir, `${id}.webp`);
+
+    try {
+      await fs.promises.writeFile(inputPath, inputBuffer);
+      const ffmpegBin = process.platform === 'win32' ? 'ffmpeg' : (fs.existsSync('/usr/bin/ffmpeg') ? '/usr/bin/ffmpeg' : 'ffmpeg');
+
+      const args = isVideo
+        ? [
+            '-y',
+            '-i', inputPath,
+            '-t', '9',
+            '-vf', 'scale=512:512:force_original_aspect_ratio=decrease,fps=12,pad=512:512:(ow-iw)/2:(oh-ih)/2:color=0x00000000',
+            '-vcodec', 'libwebp',
+            '-lossless', '0',
+            '-compression_level', '6',
+            '-q:v', '40',
+            '-loop', '0',
+            '-an',
+            '-vsync', '0',
+            outputPath
+          ]
+        : [
+            '-y',
+            '-i', inputPath,
+            '-vf', 'scale=512:512:force_original_aspect_ratio=decrease,pad=512:512:(ow-iw)/2:(oh-ih)/2:color=0x00000000',
+            '-vcodec', 'libwebp',
+            '-lossless', '0',
+            '-compression_level', '6',
+            '-q:v', '70',
+            outputPath
+          ];
+
+      execFile(ffmpegBin, args, { timeout: 35000 }, async (err) => {
+        try {
+          if (fs.existsSync(outputPath)) {
+            const webpBuf = await fs.promises.readFile(outputPath);
+            await fs.promises.unlink(inputPath).catch(() => {});
+            await fs.promises.unlink(outputPath).catch(() => {});
+            return resolve(webpBuf);
+          }
+        } catch (e) {}
+
+        await fs.promises.unlink(inputPath).catch(() => {});
+        reject(err || new Error('Gagal konversi stiker webp.'));
+      });
+    } catch (err) {
+      reject(err);
+    }
+  });
 }
 
 // ====================================================================
@@ -222,6 +404,57 @@ async function runYtDlpDownload(targetUrl, maxMb = 50) {
       return resolve({ 
         success: false, 
         error: stderr ? stderr.split('\n').filter(Boolean).slice(-2).join(' ') : (err?.message || 'Download gagal.')
+      });
+    });
+  });
+}
+
+// ====================================================================
+// FUNGSI DOWNLOAD MUSIK / AUDIO MP3
+// ====================================================================
+async function downloadAudioMp3(queryOrUrl) {
+  const binary = getYtDlpBinary();
+  const fileId = 'mp3_' + crypto.randomBytes(6).toString('hex');
+  const tempDir = os.tmpdir();
+  const outputTemplate = path.join(tempDir, `${fileId}.%(ext)s`);
+
+  const isUrl = /^https?:\/\//i.test(queryOrUrl.trim());
+  const target = isUrl ? queryOrUrl.trim() : `ytsearch1:${queryOrUrl.trim()}`;
+
+  const args = [
+    '--no-playlist',
+    '--no-warnings',
+    '--extract-audio',
+    '--audio-format', 'mp3',
+    '--audio-quality', '192K',
+    '--max-filesize', '30M',
+    '-o', outputTemplate,
+    target
+  ];
+
+  return new Promise((resolve) => {
+    execFile(binary, args, { timeout: 90000 }, async (err, stdout, stderr) => {
+      try {
+        const files = await fs.promises.readdir(tempDir);
+        const match = files.find(f => f.startsWith(fileId));
+        if (match) {
+          const filePath = path.join(tempDir, match);
+          const stat = await fs.promises.stat(filePath);
+          const buffer = await fs.promises.readFile(filePath);
+          await fs.promises.unlink(filePath).catch(() => {});
+          
+          return resolve({
+            success: true,
+            buffer,
+            size: stat.size,
+            filename: match
+          });
+        }
+      } catch (scanErr) {}
+
+      return resolve({
+        success: false,
+        error: stderr ? stderr.split('\n').filter(Boolean).slice(-2).join(' ') : (err?.message || 'Gagal mengunduh audio MP3.')
       });
     });
   });
@@ -599,7 +832,6 @@ async function downloadXiaohongshu(rawUrl) {
 
     const html = await pageRes.text();
 
-    // Cari window.__INITIAL_STATE__ atau window.__INITIAL_SSR_STATE__
     const stateMatch = html.match(/window\.__INITIAL_(?:SSR_)?STATE__\s*=\s*(\{.*?\});?<\/script>/s);
 
     if (stateMatch && stateMatch[1]) {
@@ -727,7 +959,7 @@ try {
     res.writeHead(200, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify({
       status: 'online',
-      bot: 'WhatsApp AI Bot (Gemini + Multi-Downloader)',
+      bot: 'WhatsApp AI Bot (Gemini + Multi-Downloader + Tools)',
       timestamp: new Date().toISOString()
     }));
   });
@@ -764,6 +996,20 @@ async function startWhatsAppBot() {
   });
 
   sock.ev.on('creds.update', saveCreds);
+
+  // Sambutan otomatis saat ada anggota baru masuk grup
+  sock.ev.on('group-participants.update', async ({ id, participants, action }) => {
+    if (action === 'add') {
+      for (const p of participants) {
+        try {
+          const welcomeText = `👋 Halo @${p.split('@')[0]}, selamat datang di grup! Silakan patuhi aturan grup dan nikmati obrolan ya! ✨`;
+          await sock.sendMessage(id, { text: welcomeText, mentions: [p] });
+        } catch (wErr) {
+          // ignore
+        }
+      }
+    }
+  });
 
   const pairingNumber = process.env.WA_PHONE_NUMBER || process.env.PAIRING_NUMBER;
   if (!state.creds.registered && pairingNumber) {
@@ -816,7 +1062,7 @@ async function startWhatsAppBot() {
       console.log('✅ WHATSAPP AI BOT SUDAH TERHUBUNG & AKTIF!');
       console.log(`📱 Nomor Bot: +${botNumber}`);
       console.log(`⚡ Model AI : ${AI_MODELS.join(', ')}`);
-      console.log('📥 Downloader: IG, FB, Threads, TikTok, RedNote, X, YT');
+      console.log('📥 Fitur    : Downloader, Stiker, TTS, Translator, Vision, Grup');
       console.log('==================================================\n');
     }
   });
@@ -841,9 +1087,25 @@ async function startWhatsAppBot() {
           ''
         ).trim();
 
-        if (!body) continue;
-
-        console.log(`\n📩 [${isGroup ? 'GRUP' : 'JAPRI'}] Dari: ${pushName} (${remoteJid}): "${body}"`);
+        // ----------------------------------------------------------------
+        // PROTEKSI ANTI-LINK GRUP (JIKA ON)
+        // ----------------------------------------------------------------
+        if (isGroup && antilinkGroups.has(remoteJid)) {
+          const isWaGroupLink = /(?:chat\.whatsapp\.com\/[a-zA-Z0-9]+)/i.test(body);
+          if (isWaGroupLink) {
+            const sender = msg.key.participant || remoteJid;
+            try {
+              await sock.sendMessage(remoteJid, { delete: msg.key });
+              await sock.sendMessage(remoteJid, {
+                text: `⚠️ Dilarang mengirim tautan grup lain di sini! @${sender.split('@')[0]}`,
+                mentions: [sender]
+              });
+              continue;
+            } catch (delErr) {
+              // Abaikan jika bot bukan admin
+            }
+          }
+        }
 
         const botNumber = sock.user?.id ? sock.user.id.split(':')[0] : '';
         const mentionedJids = msg.message?.extendedTextMessage?.contextInfo?.mentionedJid || [];
@@ -877,11 +1139,28 @@ Halo, *${pushName}*! 👋
 ├ • */download.th <link>*
 ├ • */download.yt <link>*
 ├ • */download.x <link>*
+├ • */mp3 <judul/link>*
 ╰────────────────────────
 
-🧠 *AI & SISTEM*
-├ • */ai <teks>* : Tanya AI
+🎨 *MEDIA & STIKER*
+├ • */s* : Buat stiker (foto/video)
+├ • */tts <teks>* : Teks jadi suara VN
+├ • */tr <bahasa> <teks>* : Terjemahan AI
+╰────────────────────────
+
+🧠 *AI MULTIMODAL*
+├ • Kirim foto + caption : Tanya isi foto
+├ • */ai <teks>* : Tanya AI Gemini
 ├ • */reset* : Hapus riwayat chat
+╰────────────────────────
+
+👥 *GRUP WHATSAPP*
+├ • */hidetag <pesan>* : Tag semua anggota
+├ • */antilink on/off* : Proteksi link grup
+╰────────────────────────
+
+⚙️ *SISTEM*
+├ • */menu* : Daftar perintah
 ├ • */ping* : Cek kecepatan bot
 ├ • */status* : Info server VPS
 
@@ -914,7 +1193,7 @@ Halo, *${pushName}*! 👋
 💾 *RAM Server*: ${usedMem} MB / ${totalMem} MB
 ⚡ *Node.js*: ${process.version}
 🔑 *Gemini API Pool*: ${GEMINI_KEYS.length} Kunci Aktif (Anti-Limit)
-🤖 *Downloader*: yt-dlp + ffmpeg + btch
+🤖 *Fitur*: Multi-Downloader, Vision, Stiker, TTS, Translate
 🌐 *Status*: Online 24/7 di VPS Indonesia`;
 
           await sock.sendMessage(remoteJid, { text: statusText }, { quoted: msg });
@@ -946,7 +1225,202 @@ Halo, *${pushName}*! 👋
         }
 
         // ================================================================
-        // 5. DOWNLOAD INSTAGRAM (/download.ig <link>)
+        // 5. PEMBUAT STIKER OTOMATIS (/s atau /sticker)
+        // ================================================================
+        const isStickerCommand = lowerBody === '/s' || 
+                                 lowerBody === '!s' || 
+                                 lowerBody.startsWith('/s ') || 
+                                 lowerBody.startsWith('/sticker') || 
+                                 lowerBody.startsWith('!sticker');
+
+        if (isStickerCommand) {
+          const media = await extractMedia(msg);
+          if (!media || (!media.isImage && !media.isVideo && !media.isSticker)) {
+            await sock.sendMessage(remoteJid, {
+              text: '⚠️ Kirim foto/video pendek (<10 detik) dengan caption */s* atau reply foto/video dengan */s* untuk membuat stiker!'
+            }, { quoted: msg });
+            continue;
+          }
+
+          await sock.sendMessage(remoteJid, { text: '⏳ *Sedang membuat stiker...*' }, { quoted: msg });
+          try {
+            const webpBuffer = await bufferToWebpSticker(media.buffer, media.isVideo);
+            await sock.sendMessage(remoteJid, { sticker: webpBuffer }, { quoted: msg });
+            console.log(`✅ Stiker berhasil dikirim ke ${pushName}`);
+          } catch (stkErr) {
+            console.error('[STICKER ERROR]', stkErr);
+            await sock.sendMessage(remoteJid, {
+              text: '❌ Gagal membuat stiker. Pastikan file media tidak rusak dan durasi video di bawah 10 detik.'
+            }, { quoted: msg });
+          }
+          continue;
+        }
+
+        // ================================================================
+        // 6. TEXT TO SPEECH VN (/tts <teks>)
+        // ================================================================
+        const isTtsCommand = lowerBody.startsWith('/tts') || lowerBody.startsWith('!tts');
+        if (isTtsCommand) {
+          let ttsText = body.replace(/^[\/!]tts\s*/i, '').trim();
+          let lang = 'id';
+          
+          const parts = ttsText.split(' ');
+          if (parts.length > 1 && parts[0].length === 2 && /^[a-z]{2}$/i.test(parts[0])) {
+            lang = parts[0].toLowerCase();
+            ttsText = parts.slice(1).join(' ');
+          }
+
+          if (!ttsText) {
+            await sock.sendMessage(remoteJid, {
+              text: '⚠️ *Format*: */tts <teks>* atau */tts en <teks>*\nContoh: `/tts halo apa kabar semua`'
+            }, { quoted: msg });
+            continue;
+          }
+
+          await sock.sendMessage(remoteJid, { text: '🎙️ *Sedang membuat pesan suara...*' }, { quoted: msg });
+          try {
+            const audioBuf = await generateTtsAudio(ttsText, lang);
+            await sock.sendMessage(remoteJid, {
+              audio: audioBuf,
+              mimetype: 'audio/mp4',
+              ptt: true
+            }, { quoted: msg });
+            console.log(`✅ TTS suara terkirim ke ${pushName}`);
+          } catch (ttsErr) {
+            await sock.sendMessage(remoteJid, { text: `❌ Gagal membuat suara: ${ttsErr.message}` }, { quoted: msg });
+          }
+          continue;
+        }
+
+        // ================================================================
+        // 7. AI TRANSLATOR INSTAN (/tr <kode_bahasa> <teks>)
+        // ================================================================
+        const isTrCommand = lowerBody.startsWith('/tr') || lowerBody.startsWith('!tr');
+        if (isTrCommand) {
+          let trInput = body.replace(/^[\/!]tr\s*/i, '').trim();
+          const trParts = trInput.split(' ');
+          if (trParts.length < 2) {
+            await sock.sendMessage(remoteJid, {
+              text: '⚠️ *Format*: */tr <bahasa> <teks>*\nContoh:\n• `/tr en selamat pagi` (ke Inggris)\n• `/tr id good morning` (ke Indonesia)\n• `/tr jp terima kasih` (ke Jepang)'
+            }, { quoted: msg });
+            continue;
+          }
+
+          const targetLang = trParts[0];
+          const textToTranslate = trParts.slice(1).join(' ');
+
+          await sock.sendPresenceUpdate('composing', remoteJid);
+          const translated = await translateText(targetLang, textToTranslate);
+          await sock.sendPresenceUpdate('paused', remoteJid);
+
+          if (translated) {
+            await sock.sendMessage(remoteJid, {
+              text: `🌐 *Hasil Terjemahan [${targetLang.toUpperCase()}]*:\n\n${translated}`
+            }, { quoted: msg });
+            console.log(`✅ Terjemahan terkirim ke ${pushName}`);
+          } else {
+            await sock.sendMessage(remoteJid, {
+              text: '❌ Gagal menerjemahkan teks. Silakan coba lagi.'
+            }, { quoted: msg });
+          }
+          continue;
+        }
+
+        // ================================================================
+        // 8. DOWNLOAD MUSIK MP3 (/mp3 <judul/link>)
+        // ================================================================
+        const isMp3Command = lowerBody.startsWith('/mp3') || 
+                             lowerBody.startsWith('/download.mp3') || 
+                             lowerBody.startsWith('/downdload.mp3') || 
+                             lowerBody.startsWith('!mp3');
+
+        if (isMp3Command) {
+          const query = body.replace(/^[\/!](?:download\.)?mp3\s*/i, '').trim();
+          if (!query) {
+            await sock.sendMessage(remoteJid, {
+              text: '⚠️ *Format*: */mp3 <judul lagu atau link>*\nContoh:\n• `/mp3 komang raim laode`\n• `/mp3 https://youtu.be/xxxx`'
+            }, { quoted: msg });
+            continue;
+          }
+
+          console.log(`🎵 Mencari audio MP3 dari ${pushName}: "${query}"`);
+          await sock.sendMessage(remoteJid, { text: `🎵 *Mencari dan mengunduh audio: "${query}"...*\nMohon tunggu beberapa saat ya!` }, { quoted: msg });
+          await sock.sendPresenceUpdate('recording', remoteJid);
+
+          const result = await downloadAudioMp3(query);
+          await sock.sendPresenceUpdate('paused', remoteJid);
+
+          if (result.success && result.buffer) {
+            await sock.sendMessage(remoteJid, {
+              audio: result.buffer,
+              mimetype: 'audio/mp4',
+              fileName: `${query.replace(/[^a-zA-Z0-9_-]/g, '_').substring(0, 30)}.mp3`
+            }, { quoted: msg });
+            console.log(`✅ Lagu MP3 "${query}" berhasil dikirim ke ${pushName}`);
+          } else {
+            await sock.sendMessage(remoteJid, {
+              text: `❌ Gagal mengunduh audio MP3: ${result.error || 'Lagu tidak ditemukan atau ukuran terlalu besar.'}`
+            }, { quoted: msg });
+          }
+          continue;
+        }
+
+        // ================================================================
+        // 9. HIDETAG / TAG ALL GRUP (/hidetag <pesan>)
+        // ================================================================
+        const isHidetag = lowerBody.startsWith('/hidetag') || 
+                          lowerBody.startsWith('/tagall') || 
+                          lowerBody.startsWith('/everyone') || 
+                          lowerBody.startsWith('!hidetag') ||
+                          lowerBody.startsWith('!tagall');
+
+        if (isHidetag) {
+          if (!isGroup) {
+            await sock.sendMessage(remoteJid, { text: '⚠️ Perintah ini hanya dapat digunakan di dalam grup!' }, { quoted: msg });
+            continue;
+          }
+
+          try {
+            const groupMetadata = await sock.groupMetadata(remoteJid);
+            const participants = groupMetadata.participants.map(p => p.id);
+            const tagText = body.replace(/^[\/!](?:hidetag|tagall|everyone)\s*/i, '').trim();
+
+            await sock.sendMessage(remoteJid, {
+              text: tagText || '📢 *PENGUMUMAN GRUP*',
+              mentions: participants
+            }, { quoted: msg });
+          } catch (grpErr) {
+            await sock.sendMessage(remoteJid, { text: '❌ Gagal melakukan hidetag: ' + grpErr.message }, { quoted: msg });
+          }
+          continue;
+        }
+
+        // ================================================================
+        // 10. PROTEKSI ANTI-LINK ON/OFF (/antilink on/off)
+        // ================================================================
+        const isAntilinkCmd = lowerBody.startsWith('/antilink') || lowerBody.startsWith('!antilink');
+        if (isAntilinkCmd) {
+          if (!isGroup) {
+            await sock.sendMessage(remoteJid, { text: '⚠️ Perintah ini hanya dapat digunakan di dalam grup!' }, { quoted: msg });
+            continue;
+          }
+
+          const opt = lowerBody.replace(/^[\/!]antilink\s*/i, '').trim();
+          if (opt === 'on') {
+            antilinkGroups.add(remoteJid);
+            await sock.sendMessage(remoteJid, { text: '🛡️ *Anti-Link AKTIF!*\nPesan yang berisi tautan undangan grup WhatsApp lain akan otomatis dihapus.' }, { quoted: msg });
+          } else if (opt === 'off') {
+            antilinkGroups.delete(remoteJid);
+            await sock.sendMessage(remoteJid, { text: '🛡️ *Anti-Link DINONAKTIFKAN.*' }, { quoted: msg });
+          } else {
+            const isAct = antilinkGroups.has(remoteJid);
+            await sock.sendMessage(remoteJid, { text: `🛡️ Status Anti-Link grup ini: *${isAct ? 'ON' : 'OFF'}*\nKetik */antilink on* atau */antilink off*` }, { quoted: msg });
+          }
+          continue;
+        }
+
+        // ================================================================
+        // 11. DOWNLOAD INSTAGRAM (/download.ig <link>)
         // ================================================================
         const isIgCommand = lowerBody.startsWith('/download.ig') ||
                             lowerBody.startsWith('/downdload.ig') ||
@@ -1017,7 +1491,7 @@ Halo, *${pushName}*! 👋
         }
 
         // ================================================================
-        // 6. DOWNLOAD FACEBOOK (/download.fb <link>)
+        // 12. DOWNLOAD FACEBOOK (/download.fb <link>)
         // ================================================================
         const isFbCommand = lowerBody.startsWith('/download.fb') ||
                             lowerBody.startsWith('/downdload.fb') ||
@@ -1038,7 +1512,7 @@ Halo, *${pushName}*! 👋
           }
 
           console.log(`👥 Mendeteksi link Facebook dari ${pushName}: ${fbUrl}`);
-          await sock.sendMessage(remoteJid, { text: '⏳ *Sedang mengunduh video Facebook...*\nMohon tunggu beberapa detik ya!' }, { quoted: msg });
+          await sock.sendMessage(remoteJid, { text: '⏳ *Sedang mengunduh video Facebook...*' }, { quoted: msg });
           await sock.sendPresenceUpdate('recording', remoteJid);
 
           const result = await downloadFacebook(fbUrl);
@@ -1047,20 +1521,20 @@ Halo, *${pushName}*! 👋
           if (result.success && result.buffer) {
             await sock.sendMessage(remoteJid, {
               video: result.buffer,
-              caption: `👥 *Facebook Video Downloader (${result.quality || 'HD'})*\n⚡ _Berhasil diunduh oleh AI WhatsApp Bot!_`,
+              caption: `👥 *Facebook Video Downloader (${result.quality || 'HD'})*`,
               mimetype: 'video/mp4'
             }, { quoted: msg });
             console.log(`✅ Video Facebook berhasil dikirim ke ${pushName}`);
           } else {
             await sock.sendMessage(remoteJid, {
-              text: `❌ *Gagal mengunduh video Facebook*\n\nAlasan: ${result.error}\n_Pastikan video bersifat publik dan tautannya aktif._`
+              text: `❌ *Gagal mengunduh video Facebook*: ${result.error}`
             }, { quoted: msg });
           }
           continue;
         }
 
         // ================================================================
-        // 7. DOWNLOAD THREADS (/download.th <link>)
+        // 13. DOWNLOAD THREADS (/download.th <link>)
         // ================================================================
         const isThreadsCommand = lowerBody.startsWith('/download.th') ||
                                  lowerBody.startsWith('/downdload.th') ||
@@ -1119,7 +1593,7 @@ Halo, *${pushName}*! 👋
         }
 
         // ================================================================
-        // 8. DOWNLOAD REDNOTE / XIAOHONGSHU (/download.rn <link>)
+        // 14. DOWNLOAD REDNOTE / XIAOHONGSHU (/download.rn <link>)
         // ================================================================
         const isXhsCommand = lowerBody.startsWith('/download.rn') ||
                              lowerBody.startsWith('/downdload.rn') ||
@@ -1207,7 +1681,7 @@ Halo, *${pushName}*! 👋
         }
 
         // ================================================================
-        // 9. DOWNLOAD TIKTOK (/download.tt <link>)
+        // 15. DOWNLOAD TIKTOK (/download.tt <link>)
         // ================================================================
         const isTtCommand = lowerBody.startsWith('/download.tt') ||
                             lowerBody.startsWith('/downdload.tt') ||
@@ -1266,7 +1740,7 @@ Halo, *${pushName}*! 👋
         }
 
         // ================================================================
-        // 10. DOWNLOAD TWITTER / X (/download.x <link>)
+        // 16. DOWNLOAD TWITTER / X (/download.x <link>)
         // ================================================================
         const isTwCommand = lowerBody.startsWith('/download.x') ||
                             lowerBody.startsWith('/downdload.x') ||
@@ -1313,7 +1787,7 @@ Halo, *${pushName}*! 👋
         }
 
         // ================================================================
-        // 11. DOWNLOAD YOUTUBE (/download.yt <link>)
+        // 17. DOWNLOAD YOUTUBE (/download.yt <link>)
         // ================================================================
         const isYtCommand = lowerBody.startsWith('/download.yt') ||
                             lowerBody.startsWith('/downdload.yt') ||
@@ -1356,11 +1830,13 @@ Halo, *${pushName}*! 👋
         }
 
         // ================================================================
-        // 12. CHAT AI GEMINI (/ai <pertanyaan> atau chat langsung di japri)
+        // 18. CHAT AI GEMINI (MULTIMODAL: TEKS & VISION GAMBAR)
         // ================================================================
         let cleanPrompt = body;
         if (cleanPrompt.startsWith('/ai')) {
           cleanPrompt = cleanPrompt.replace(/^\/ai\s*/i, '');
+        } else if (cleanPrompt.startsWith('/cek')) {
+          cleanPrompt = cleanPrompt.replace(/^\/cek\s*/i, '');
         } else if (cleanPrompt.startsWith('/tanya')) {
           cleanPrompt = cleanPrompt.replace(/^\/tanya\s*/i, '');
         } else if (cleanPrompt.startsWith('/ask')) {
@@ -1371,9 +1847,19 @@ Halo, *${pushName}*! 👋
           cleanPrompt = cleanPrompt.replace(/^ai\s+/i, '');
         }
 
-        if (!cleanPrompt.trim()) {
+        // Cek apakah ada gambar yang dikirim atau di-quote
+        let imageBuffer = null;
+        let imageMime = 'image/jpeg';
+        const media = await extractMedia(msg);
+        if (media && (media.isImage || media.isSticker)) {
+          imageBuffer = media.buffer;
+          imageMime = media.mimeType || 'image/jpeg';
+          console.log(`👁️ Memproses gambar dengan Gemini AI Vision dari ${pushName}`);
+        }
+
+        if (!cleanPrompt.trim() && !imageBuffer) {
           await sock.sendMessage(remoteJid, { 
-            text: 'Halo! Ada yang bisa saya bantu? Ketik */ai <pertanyaan Anda>* atau ketik */menu* untuk melihat panduan fitur.' 
+            text: 'Halo! Ada yang bisa saya bantu? Ketik */ai <pertanyaan>* atau ketik */menu* untuk melihat semua fitur.' 
           }, { quoted: msg });
           continue;
         }
@@ -1381,8 +1867,8 @@ Halo, *${pushName}*! 👋
         // Efek "Sedang Mengetik..." di WhatsApp agar terasa natural
         await sock.sendPresenceUpdate('composing', remoteJid);
 
-        // Generate balasan via Gemini AI
-        const aiResponse = await generateAiReply(remoteJid, cleanPrompt, pushName);
+        // Generate balasan via Gemini AI (Multimodal jika ada gambar)
+        const aiResponse = await generateAiReply(remoteJid, cleanPrompt, pushName, imageBuffer, imageMime);
 
         // Hentikan efek mengetik
         await sock.sendPresenceUpdate('paused', remoteJid);
