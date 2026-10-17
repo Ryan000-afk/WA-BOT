@@ -54,6 +54,28 @@ const activeAsahOtak = new Map();
 // Penyimpan kontak yang sudah disapa agar tidak spamming pesan sapaan
 const greetedUsers = new Set();
 
+// Counter interaksi pengguna untuk promosi SonnDev Roblox Script (setiap 5 request)
+const promoCounters = new Map();
+
+function triggerPromoIfDue(shouldSendPromo, sock, remoteJid) {
+  if (!shouldSendPromo) return;
+  setTimeout(async () => {
+    try {
+      const promoText = 
+`🎮 *REKOMENDASI SCRIPT ROBLOX* 🎮
+
+Sedang mencari script game Roblox terbaik, fitur lengkap, dan gratis?
+Kunjungi profil resmi *SonnDev* di sini:
+👉 https://rscripts.net/@SonnDev
+
+_Temukan berbagai script game Roblox pilihan terupdate untuk mempermudah permainanmu!_ ✨`;
+      await sock.sendMessage(remoteJid, { text: promoText });
+    } catch (err) {
+      console.warn('[PROMO SEND ERROR]', err.message);
+    }
+  }, 2500);
+}
+
 // Persona Asisten AI WhatsApp (Profesional, Cerdas & Sopan - Bukan Pacar/Pasangan)
 const DEFAULT_SYSTEM_PROMPT = 
   process.env.WA_AI_SYSTEM_PROMPT || 
@@ -1452,6 +1474,14 @@ async function startWhatsAppBot() {
           }
         }
 
+        // Hitung request untuk promosi SonnDev Roblox Script (setiap 5 request)
+        if (body.trim()) {
+          const userReqCount = (promoCounters.get(remoteJid) || 0) + 1;
+          promoCounters.set(remoteJid, userReqCount);
+          const shouldSendPromo = (userReqCount % 5 === 0);
+          triggerPromoIfDue(shouldSendPromo, sock, remoteJid);
+        }
+
         // ================================================================
         // 0. SAPAAN AWAL RAMAH (HANYA SEKALI DI AWAL OBROLAN PRIVATE CHAT)
         // ================================================================
@@ -1533,6 +1563,23 @@ Halo, *${pushName}*! 👋
 💡 _Tips: Bisa langsung kirim/paste link ke chat tanpa ketik perintah!_`;
 
           await sock.sendMessage(remoteJid, { text: menuText }, { quoted: msg });
+          continue;
+        }
+
+        // ================================================================
+        // SCRIPT ROBLOX SONNDEV (/roblox atau /script)
+        // ================================================================
+        const isRobloxCmd = lowerBody === '/roblox' || lowerBody === '/script' || 
+                            lowerBody === '!roblox' || lowerBody === '!script';
+        if (isRobloxCmd) {
+          const robloxText = 
+`🎮 *SCRIPT ROBLOX BY SONNDEV* 🎮
+
+Temukan berbagai script game Roblox gratis, terbaik, dan selalu update di profil resmi *SonnDev*:
+👉 https://rscripts.net/@SonnDev
+
+Tersedia berbagai pilihan script populer untuk memaksimalkan permainan Roblox kamu! 🔥`;
+          await sock.sendMessage(remoteJid, { text: robloxText }, { quoted: msg });
           continue;
         }
 
