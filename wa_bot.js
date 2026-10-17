@@ -1,6 +1,7 @@
 require('dotenv').config();
 const path = require('path');
 const fs = require('fs');
+const os = require('os');
 const pino = require('pino');
 const qrcode = require('qrcode-terminal');
 const {
@@ -546,12 +547,236 @@ async function startWhatsAppBot() {
           }
         }
 
+        const lowerBody = body.toLowerCase().trim();
+
         // ================================================================
-        // DETEKSI DAN DOWNLOAD VIDEO TIKTOK (NO WATERMARK)
+        // 1. MENU & PANDUAN (/menu atau /help)
         // ================================================================
+        if (lowerBody === '/menu' || lowerBody === '/help' || lowerBody === '!menu' || lowerBody === '!help') {
+          const menuText = 
+`╭────────────────────────────╮
+│    🤖 *WHATSAPP AI BOT*    │
+│  _Online 24 Jam di VPS_   │
+╰────────────────────────────╯
+
+Halo, *${pushName}*! 👋
+Berikut daftar menu dan perintah yang tersedia:
+
+📥 *DOWNLOADER (NO WATERMARK)*
+├ • */download.xiaohongshu <link>*
+│   _Unduh Video, Foto HD, & Live Photo (RedNote)_
+│   Contoh: \`/download.xiaohongshu http://xhslink.com/...\`
+│
+├ • */download.tiktok <link>*
+│   _Unduh Video TikTok HD & Slide Tanpa Watermark_
+│   Contoh: \`/download.tiktok https://vt.tiktok.com/...\`
+╰────────────────────────────
+
+🧠 *AI ASSISTANT (GEMINI)*
+├ • */ai <pertanyaan>*
+│   _Tanya atau diskusi apa saja dengan Gemini AI_
+│   Contoh: \`/ai berikan ide jualan makanan unik\`
+│
+├ • */reset*
+│   _Hapus memori chat untuk memulai topik baru_
+╰────────────────────────────
+
+⚙️ *SISTEM & INFORMASI*
+├ • */menu* : Menampilkan menu perintah ini
+├ • */ping* : Cek kecepatan respon bot
+├ • */status* : Cek info server VPS & penggunaan RAM
+╰────────────────────────────
+
+💡 *Tips*: Anda juga bisa langsung menempelkan link TikTok atau Xiaohongshu langsung ke chat ini!`;
+
+          await sock.sendMessage(remoteJid, { text: menuText }, { quoted: msg });
+          continue;
+        }
+
+        // ================================================================
+        // 2. STATUS SERVER VPS (/status)
+        // ================================================================
+        if (lowerBody === '/status' || lowerBody === '!status') {
+          const uptimeSec = process.uptime();
+          const d = Math.floor(uptimeSec / (3600 * 24));
+          const h = Math.floor((uptimeSec % (3600 * 24)) / 3600);
+          const m = Math.floor((uptimeSec % 3600) / 60);
+          const s = Math.floor(uptimeSec % 60);
+          const uptimeStr = `${d > 0 ? d + ' hari ' : ''}${h} jam ${m} menit ${s} detik`;
+
+          const totalMem = (os.totalmem() / 1024 / 1024).toFixed(0);
+          const freeMem = (os.freemem() / 1024 / 1024).toFixed(0);
+          const usedMem = (totalMem - freeMem);
+
+          const statusText = 
+`📊 *STATUS SERVER VPS*
+
+🖥️ *OS*: Ubuntu Linux (64-bit)
+⏱️ *Uptime Bot*: ${uptimeStr}
+💾 *RAM Server*: ${usedMem} MB / ${totalMem} MB
+⚡ *Node.js*: ${process.version}
+🔑 *Gemini API Pool*: ${GEMINI_KEYS.length} Kunci Aktif (Anti-Limit)
+🤖 *Status*: Online 24/7 di VPS Indonesia`;
+
+          await sock.sendMessage(remoteJid, { text: statusText }, { quoted: msg });
+          continue;
+        }
+
+        // ================================================================
+        // 3. PING & CEK RESPON (/ping)
+        // ================================================================
+        if (lowerBody === '/ping' || lowerBody === '!ping') {
+          const start = Date.now();
+          await sock.sendMessage(remoteJid, { text: '🏓 *Pinging server...*' }, { quoted: msg });
+          const latency = Date.now() - start;
+          await sock.sendMessage(remoteJid, { 
+            text: `🏓 *Pong!*\n⚡ Kecepatan respon: *${latency} ms*\n🌐 Server VPS: *Online & Aktif 24 Jam*` 
+          }, { quoted: msg });
+          continue;
+        }
+
+        // ================================================================
+        // 4. RESET MEMORI CHAT (/reset atau /clear)
+        // ================================================================
+        if (lowerBody === '/reset' || lowerBody === '/clear' || lowerBody === '!reset' || lowerBody === '!clear') {
+          clearChatHistory(remoteJid);
+          await sock.sendMessage(remoteJid, { 
+            text: '🧹 *Memori percakapan telah dibersihkan!*\nKita bisa memulai obrolan topik baru dari awal.' 
+          }, { quoted: msg });
+          continue;
+        }
+
+        // ================================================================
+        // 5. DOWNLOAD XIAOHONGSHU (/download.xiaohongshu <link>)
+        // ================================================================
+        const isXhsCommand = lowerBody.startsWith('/download.xiaohongshu') ||
+                             lowerBody.startsWith('/download.xhs') ||
+                             lowerBody.startsWith('/xiaohongshu') ||
+                             lowerBody.startsWith('/xhs') ||
+                             lowerBody.startsWith('!download.xiaohongshu');
+
+        const xhsMatch = body.match(XHS_REGEX);
+
+        if (isXhsCommand || xhsMatch) {
+          const xhsUrl = xhsMatch ? xhsMatch[0] : '';
+
+          if (!xhsUrl) {
+            const helpMsg = 
+`⚠️ *Format Perintah Xiaohongshu*
+
+Gunakan format:
+*/download.xiaohongshu <link_postingan>*
+
+Contoh:
+\`/download.xiaohongshu http://xhslink.com/a/xxxxxx\`
+
+_Fitur: Mengunduh Video tanpa watermark, Foto resolusi asli, dan Live Photo bergerak!_`;
+            await sock.sendMessage(remoteJid, { text: helpMsg }, { quoted: msg });
+            continue;
+          }
+
+          console.log(`📕 Mendeteksi tautan Xiaohongshu dari ${pushName}: ${xhsUrl}`);
+
+          await sock.sendMessage(remoteJid, { 
+            text: '⏳ *Sedang mendownload konten Xiaohongshu (RedNote)...*\nMohon tunggu beberapa detik ya!' 
+          }, { quoted: msg });
+
+          await sock.sendPresenceUpdate('recording', remoteJid);
+          const result = await downloadXiaohongshu(xhsUrl);
+          await sock.sendPresenceUpdate('paused', remoteJid);
+
+          if (result.success) {
+            if (result.type === 'video') {
+              const caption = 
+`📕 *Xiaohongshu Video Downloader (No Watermark)*
+
+👤 *Author*: ${result.author}
+📝 *Judul*: ${result.title}
+${result.desc ? `\n💬 *Deskripsi*: ${result.desc.substring(0, 150)}...` : ''}
+
+⚡ _Berhasil diunduh tanpa watermark oleh AI WhatsApp Bot!_`;
+
+              await sock.sendMessage(remoteJid, {
+                video: result.videoBuffer,
+                caption: caption,
+                mimetype: 'video/mp4'
+              }, { quoted: msg });
+              console.log(`✅ Video Xiaohongshu berhasil dikirim ke ${pushName}`);
+            } else if (result.type === 'gallery') {
+              let livePhotoCount = 0;
+              const totalItems = result.mediaItems.length;
+
+              for (let i = 0; i < Math.min(totalItems, 10); i++) {
+                const item = result.mediaItems[i];
+                const isFirst = i === 0;
+                const caption = isFirst 
+                  ? `📕 *Xiaohongshu Media Gallery*\n👤 *Author*: ${result.author}\n📝 *Judul*: ${result.title}\n📷 Total: ${totalItems} foto ${item.isLivePhoto ? '(Termasuk Live Photo)' : ''}`
+                  : undefined;
+
+                if (item.photoUrl) {
+                  await sock.sendMessage(remoteJid, {
+                    image: { url: item.photoUrl },
+                    caption: caption
+                  });
+                }
+
+                if (item.isLivePhoto && item.liveVideoUrl) {
+                  livePhotoCount++;
+                  try {
+                    const liveRes = await fetch(item.liveVideoUrl);
+                    if (liveRes.ok) {
+                      const liveBuf = Buffer.from(await liveRes.arrayBuffer());
+                      await sock.sendMessage(remoteJid, {
+                        video: liveBuf,
+                        caption: `✨ *Live Photo Motion Clip #${i + 1}* (Klip foto bergerak/dinamis)`,
+                        mimetype: 'video/mp4'
+                      });
+                    }
+                  } catch (liveErr) {
+                    console.warn('[LIVE PHOTO FETCH ERROR]', liveErr.message);
+                  }
+                }
+              }
+              console.log(`✅ ${totalItems} media Xiaohongshu (${livePhotoCount} Live Photo) berhasil dikirim ke ${pushName}`);
+            }
+          } else {
+            await sock.sendMessage(remoteJid, {
+              text: `❌ *Gagal mengunduh konten Xiaohongshu*\n\nAlasan: ${result.error}\n_Pastikan tautan benar dan postingan dapat diakses publik._`
+            }, { quoted: msg });
+          }
+
+          continue; // Selesai memproses Xiaohongshu
+        }
+
+        // ================================================================
+        // 6. DOWNLOAD TIKTOK (/download.tiktok <link>)
+        // ================================================================
+        const isTtCommand = lowerBody.startsWith('/download.tiktok') ||
+                            lowerBody.startsWith('/download.tt') ||
+                            lowerBody.startsWith('/tiktok') ||
+                            lowerBody.startsWith('/tt') ||
+                            lowerBody.startsWith('!download.tiktok');
+
         const tiktokMatch = body.match(TIKTOK_REGEX);
-        if (tiktokMatch) {
-          const tiktokUrl = tiktokMatch[0];
+
+        if (isTtCommand || tiktokMatch) {
+          const tiktokUrl = tiktokMatch ? tiktokMatch[0] : '';
+
+          if (!tiktokUrl) {
+            const helpMsg = 
+`⚠️ *Format Perintah TikTok*
+
+Gunakan format:
+*/download.tiktok <link_video>*
+
+Contoh:
+\`/download.tiktok https://vt.tiktok.com/xxxxxx/\`
+
+_Fitur: Mengunduh Video HD tanpa watermark dan Slide Foto!_`;
+            await sock.sendMessage(remoteJid, { text: helpMsg }, { quoted: msg });
+            continue;
+          }
+
           console.log(`🎬 Mendeteksi tautan TikTok dari ${pushName}: ${tiktokUrl}`);
 
           await sock.sendMessage(remoteJid, { 
@@ -559,9 +784,7 @@ async function startWhatsAppBot() {
           }, { quoted: msg });
 
           await sock.sendPresenceUpdate('recording', remoteJid);
-
           const result = await downloadTikTokVideo(tiktokUrl);
-
           await sock.sendPresenceUpdate('paused', remoteJid);
 
           if (result.success) {
@@ -599,133 +822,25 @@ async function startWhatsAppBot() {
         }
 
         // ================================================================
-        // DETEKSI DAN DOWNLOAD KONTEN XIAOHONGSHU (REDNOTE)
+        // 7. CHAT AI GEMINI (/ai <pertanyaan> atau chat langsung di japri)
         // ================================================================
-        const xhsMatch = body.match(XHS_REGEX);
-        if (xhsMatch) {
-          const xhsUrl = xhsMatch[0];
-          console.log(`📕 Mendeteksi tautan Xiaohongshu dari ${pushName}: ${xhsUrl}`);
-
-          await sock.sendMessage(remoteJid, { 
-            text: '⏳ *Sedang mendownload konten Xiaohongshu (RedNote)...*\nMohon tunggu beberapa detik ya!' 
-          }, { quoted: msg });
-
-          await sock.sendPresenceUpdate('recording', remoteJid);
-
-          const result = await downloadXiaohongshu(xhsUrl);
-
-          await sock.sendPresenceUpdate('paused', remoteJid);
-
-          if (result.success) {
-            if (result.type === 'video') {
-              const caption = 
-`📕 *Xiaohongshu Video (No Watermark)*
-
-👤 *Author*: ${result.author}
-📝 *Judul*: ${result.title}
-${result.desc ? `\n💬 *Deskripsi*: ${result.desc.substring(0, 150)}...` : ''}
-
-⚡ _Berhasil diunduh tanpa watermark oleh AI WhatsApp Bot!_`;
-
-              await sock.sendMessage(remoteJid, {
-                video: result.videoBuffer,
-                caption: caption,
-                mimetype: 'video/mp4'
-              }, { quoted: msg });
-              console.log(`✅ Video Xiaohongshu berhasil dikirim ke ${pushName}`);
-            } else if (result.type === 'gallery') {
-              let livePhotoCount = 0;
-              const totalItems = result.mediaItems.length;
-
-              for (let i = 0; i < Math.min(totalItems, 10); i++) {
-                const item = result.mediaItems[i];
-                const isFirst = i === 0;
-                const caption = isFirst 
-                  ? `📕 *Xiaohongshu Media Gallery*\n👤 *Author*: ${result.author}\n📝 *Judul*: ${result.title}\n📷 Total: ${totalItems} foto ${item.isLivePhoto ? '(Termasuk Live Photo)' : ''}`
-                  : undefined;
-
-                if (item.photoUrl) {
-                  await sock.sendMessage(remoteJid, {
-                    image: { url: item.photoUrl },
-                    caption: caption
-                  });
-                }
-
-                // Jika berupa Live Photo, kirimkan juga klip video geraknya
-                if (item.isLivePhoto && item.liveVideoUrl) {
-                  livePhotoCount++;
-                  try {
-                    const liveRes = await fetch(item.liveVideoUrl);
-                    if (liveRes.ok) {
-                      const liveBuf = Buffer.from(await liveRes.arrayBuffer());
-                      await sock.sendMessage(remoteJid, {
-                        video: liveBuf,
-                        caption: `✨ *Live Photo Motion Clip #${i + 1}* (Klip foto bergerak/dinamis)`,
-                        mimetype: 'video/mp4'
-                      });
-                    }
-                  } catch (liveErr) {
-                    console.warn('[LIVE PHOTO FETCH ERROR]', liveErr.message);
-                  }
-                }
-              }
-              console.log(`✅ ${totalItems} media Xiaohongshu (${livePhotoCount} Live Photo) berhasil dikirim ke ${pushName}`);
-            }
-          } else {
-            await sock.sendMessage(remoteJid, {
-              text: `❌ *Gagal mengunduh konten Xiaohongshu*\n\nAlasan: ${result.error}\n_Pastikan tautan benar dan postingan dapat diakses publik._`
-            }, { quoted: msg });
-          }
-
-          continue; // Selesai memproses Xiaohongshu
-        }
-
-        // ================================================================
-        // PERINTAH KHUSUS
-        // ================================================================
-        const lowerBody = body.toLowerCase();
-
-        if (lowerBody === '!ping') {
-          await sock.sendMessage(remoteJid, { text: '🏓 *Pong!*\nBot WhatsApp AI aktif dan siap merespon.' }, { quoted: msg });
-          continue;
-        }
-
-        if (lowerBody === '!reset' || lowerBody === '!clear') {
-          clearChatHistory(remoteJid);
-          await sock.sendMessage(remoteJid, { text: '🧹 *Memori percakapan telah dibersihkan!*\nKita bisa memulai obrolan topik baru dari awal.' }, { quoted: msg });
-          continue;
-        }
-
-        if (lowerBody === '!help' || lowerBody === '!menu') {
-          const helpText = 
-`🤖 *PANDUAN BOT WHATSAPP AI*
-
-Berikut beberapa fitur dan perintah yang bisa Anda gunakan:
-• *Download Video TikTok Tanpa Watermark*: Kirim/paste link video TikTok (contoh: https://vt.tiktok.com/...)
-• *Download Xiaohongshu (RedNote)*: Kirim/paste link Xiaohongshu (xhslink.com atau xiaohongshu.com) untuk download Video, Foto HD, & Live Photo (foto + klip gerak)!
-• *Ketik apa saja* langsung di chat ini untuk mengobrol atau bertanya apa pun dengan AI.
-• *!reset* atau *!clear* : Menghapus ingatan percakapan agar mulai dari topik baru.
-• *!ping* : Memeriksa status keaktifan bot.
-• *!help* : Menampilkan menu bantuan ini.
-
-Di grup WhatsApp:
-• Tag/mention bot atau gunakan format: *!ai <pertanyaan>*`;
-          await sock.sendMessage(remoteJid, { text: helpText }, { quoted: msg });
-          continue;
-        }
-
-        // Bersihkan prefix command jika ada (contoh: "!ai siapa kamu?" -> "siapa kamu?")
         let cleanPrompt = body;
-        if (cleanPrompt.startsWith('!ai')) {
-          cleanPrompt = cleanPrompt.replace(/^!ai\s*/i, '');
-        } else if (cleanPrompt.startsWith('/ai')) {
+        if (cleanPrompt.startsWith('/ai')) {
           cleanPrompt = cleanPrompt.replace(/^\/ai\s*/i, '');
+        } else if (cleanPrompt.startsWith('/tanya')) {
+          cleanPrompt = cleanPrompt.replace(/^\/tanya\s*/i, '');
+        } else if (cleanPrompt.startsWith('/ask')) {
+          cleanPrompt = cleanPrompt.replace(/^\/ask\s*/i, '');
+        } else if (cleanPrompt.startsWith('!ai')) {
+          cleanPrompt = cleanPrompt.replace(/^!ai\s*/i, '');
         } else if (cleanPrompt.toLowerCase().startsWith('ai ')) {
           cleanPrompt = cleanPrompt.replace(/^ai\s+/i, '');
         }
 
         if (!cleanPrompt.trim()) {
-          await sock.sendMessage(remoteJid, { text: 'Halo! Ada yang bisa saya bantu? Ketik pesan atau pertanyaan Anda ya.' }, { quoted: msg });
+          await sock.sendMessage(remoteJid, { 
+            text: 'Halo! Ada yang bisa saya bantu? Ketik */ai <pertanyaan Anda>* atau ketik */menu* untuk melihat panduan.' 
+          }, { quoted: msg });
           continue;
         }
 
