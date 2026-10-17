@@ -54,8 +54,105 @@ const activeAsahOtak = new Map();
 // Penyimpan kontak yang sudah disapa agar tidak spamming pesan sapaan
 const greetedUsers = new Set();
 
-// Counter interaksi pengguna untuk promosi SonnDev Roblox Script (setiap 5 request)
+// Counter interaksi pengguna untuk promosi SonnDev Roblox Script (Grup: 20x, Pribadi: 5x)
 const promoCounters = new Map();
+
+// ====================================================================
+// SISTEM DATABASE PENGGUNA & GRUP PREMIUM (BEBAS IKLAN)
+// ====================================================================
+const PREMIUM_DB_FILE = path.join(__dirname, 'premium_db.json');
+
+function loadPremiumDb() {
+  try {
+    if (fs.existsSync(PREMIUM_DB_FILE)) {
+      const data = JSON.parse(fs.readFileSync(PREMIUM_DB_FILE, 'utf8'));
+      return data && typeof data === 'object' ? data : {};
+    }
+  } catch (err) {
+    console.warn('[PREMIUM DB LOAD WARN]', err.message);
+  }
+  return {};
+}
+
+function savePremiumDb(data) {
+  try {
+    fs.writeFileSync(PREMIUM_DB_FILE, JSON.stringify(data, null, 2), 'utf8');
+  } catch (err) {
+    console.error('[PREMIUM DB SAVE ERROR]', err.message);
+  }
+}
+
+function isPremium(jid) {
+  if (!jid) return false;
+  const db = loadPremiumDb();
+  const entry = db[jid];
+  if (!entry) return false;
+  if (entry.expireAt === 'permanent' || entry.expireAt > Date.now()) {
+    return true;
+  }
+  // Hapus jika sudah kedaluwarsa
+  delete db[jid];
+  savePremiumDb(db);
+  return false;
+}
+
+function getPremiumInfo(jid) {
+  const db = loadPremiumDb();
+  const entry = db[jid];
+  if (!entry) return null;
+  if (entry.expireAt === 'permanent') {
+    return { isPermanent: true, remainingStr: 'Permanen (Selamanya)' };
+  }
+  const diffMs = entry.expireAt - Date.now();
+  if (diffMs <= 0) {
+    delete db[jid];
+    savePremiumDb(db);
+    return null;
+  }
+  const days = Math.floor(diffMs / (24 * 3600 * 1000));
+  const hours = Math.floor((diffMs % (24 * 3600 * 1000)) / (3600 * 1000));
+  return { isPermanent: false, remainingStr: `${days} hari ${hours} jam` };
+}
+
+function addPremium(jid, days = 30, plan = 'premium') {
+  const db = loadPremiumDb();
+  let expireAt;
+  if (days === 'permanent' || days === 0 || days === '999') {
+    expireAt = 'permanent';
+  } else {
+    const numDays = parseInt(days) || 30;
+    const currentExp = db[jid]?.expireAt && db[jid].expireAt > Date.now() ? db[jid].expireAt : Date.now();
+    expireAt = currentExp + (numDays * 24 * 3600 * 1000);
+  }
+  db[jid] = {
+    expireAt,
+    plan,
+    updatedAt: Date.now()
+  };
+  savePremiumDb(db);
+  return db[jid];
+}
+
+function removePremium(jid) {
+  const db = loadPremiumDb();
+  if (db[jid]) {
+    delete db[jid];
+    savePremiumDb(db);
+    return true;
+  }
+  return false;
+}
+
+const OWNER_NUMBERS = [
+  ...(process.env.OWNER_NUMBER ? process.env.OWNER_NUMBER.split(',') : []),
+  process.env.WA_PHONE_NUMBER || '6285196323485'
+].map(n => n.replace(/[^0-9]/g, '')).filter(Boolean);
+
+function isBotOwner(senderJid) {
+  if (!senderJid) return false;
+  const num = senderJid.split('@')[0].split(':')[0];
+  return OWNER_NUMBERS.some(owner => num.includes(owner));
+}
 
 function triggerPromoIfDue(shouldSendPromo, sock, remoteJid) {
   if (!shouldSendPromo) return;
@@ -68,7 +165,9 @@ Sedang mencari script game Roblox terbaik, fitur lengkap, dan gratis?
 Kunjungi profil resmi *SonnDev* di sini:
 👉 https://rscripts.net/@SonnDev
 
-_Temukan berbagai script game Roblox pilihan terupdate untuk mempermudah permainanmu!_ ✨`;
+_Temukan berbagai script game Roblox pilihan terupdate untuk mempermudah permainanmu!_ ✨
+
+💡 _Ingin bot bebas iklan? Ketik */premium* atau */qris* untuk upgrade via QRIS!_`;
       await sock.sendMessage(remoteJid, { text: promoText });
     } catch (err) {
       console.warn('[PROMO SEND ERROR]', err.message);
@@ -1474,11 +1573,14 @@ async function startWhatsAppBot() {
           }
         }
 
-        // Hitung request untuk promosi SonnDev Roblox Script (setiap 5 request)
+        // Hitung request untuk promosi SonnDev Roblox Script (Grup: 20 request, Pribadi: 5 request)
         if (body.trim()) {
           const userReqCount = (promoCounters.get(remoteJid) || 0) + 1;
           promoCounters.set(remoteJid, userReqCount);
-          const shouldSendPromo = (userReqCount % 5 === 0);
+          const interval = isGroup ? 20 : 5;
+          const senderJid = msg.key.participant || remoteJid;
+          const isPrem = isPremium(remoteJid) || isPremium(senderJid);
+          const shouldSendPromo = !isPrem && (userReqCount % interval === 0);
           triggerPromoIfDue(shouldSendPromo, sock, remoteJid);
         }
 
@@ -1555,8 +1657,16 @@ Halo, *${pushName}*! 👋
 ├ • */antilink on/off* : Proteksi link grup
 ╰────────────────────────
 
+💎 *PREMIUM & BEBAS IKLAN*
+├ • */premium* : Info paket bebas iklan
+├ • */qris* : Bayar QRIS (Semua E-Wallet/Bank)
+├ • */cekprem* : Cek masa aktif bebas iklan
+├ • */konfirmasi* : Kirim bukti pembayaran
+╰────────────────────────
+
 ⚙️ *SISTEM*
 ├ • */menu* : Daftar perintah
+├ • */roblox* : Script Roblox SonnDev
 ├ • */ping* : Cek kecepatan bot
 ├ • */status* : Info server VPS
 
@@ -1580,6 +1690,254 @@ Temukan berbagai script game Roblox gratis, terbaik, dan selalu update di profil
 
 Tersedia berbagai pilihan script populer untuk memaksimalkan permainan Roblox kamu! 🔥`;
           await sock.sendMessage(remoteJid, { text: robloxText }, { quoted: msg });
+          continue;
+        }
+
+        // ================================================================
+        // INFO PAKET PREMIUM & BEBAS IKLAN (/premium atau /sewa atau /buy)
+        // ================================================================
+        const isPremInfoCmd = lowerBody === '/premium' || lowerBody === '/sewa' || 
+                              lowerBody === '/buy' || lowerBody === '/bebasiklan' ||
+                              lowerBody === '!premium' || lowerBody === '!sewa';
+        if (isPremInfoCmd) {
+          const premText = 
+`💎 *UPGRADE PREMIUM & BEBAS IKLAN* 💎
+
+Nikmati bot tanpa jeda iklan/promosi sama sekali!
+
+📦 *PILIHAN PAKET BEBAS IKLAN*:
+1️⃣ *Paket Personal (Chat Pribadi)*:
+   • Rp 5.000 / 30 Hari
+   • Rp 10.000 / Permanen (Selamanya)
+
+2️⃣ *Paket Grup (Bebas Iklan Semua Member)*:
+   • Rp 15.000 / 30 Hari
+   • Rp 25.000 / Permanen (Selamanya)
+
+💳 *METODE PEMBAYARAN: QRIS (Semua Pembayaran)*
+Dapat dibayar via:
+• E-Wallet: Dana, OVO, GoPay, ShopeePay, LinkAja, dll.
+• M-Banking: BCA, Mandiri, BRI, BNI, Seabank, Neo, dll.
+
+📲 *CARA PEMBAYARAN*:
+1. Ketik */qris* atau */bayar* untuk menampilkan Barcode QRIS.
+2. Scan & selesaikan pembayaran sesuai nominal paket.
+3. Kirim foto struk/bukti transfer ke chat ini dengan caption */konfirmasi*.
+Status Bebas Iklan akan langsung diaktifkan!`;
+
+          await sock.sendMessage(remoteJid, { text: premText }, { quoted: msg });
+          continue;
+        }
+
+        // ================================================================
+        // PEMBAYARAN VIA QRIS (/qris atau /bayar)
+        // ================================================================
+        const isQrisCmd = lowerBody === '/qris' || lowerBody === '/bayar' || 
+                          lowerBody === '!qris' || lowerBody === '!bayar';
+        if (isQrisCmd) {
+          const qrisCaption = 
+`💎 *PEMBAYARAN QRIS RESMI (ALL PAYMENT)* 💎
+
+Silakan scan kode QRIS di atas untuk melakukan pembayaran:
+✅ *Mendukung Semua Pembayaran*:
+• E-Wallet: Dana, OVO, GoPay, ShopeePay, LinkAja, dll.
+• M-Banking: BCA, Mandiri, BRI, BNI, Seabank, Neo, Jago, dll.
+
+📋 *PILIHAN NOMINAL*:
+• Personal 30 Hari: *Rp 5.000*
+• Personal Permanen: *Rp 10.000*
+• Grup 30 Hari: *Rp 15.000*
+• Grup Permanen: *Rp 25.000*
+
+📝 *KONFIRMASI PEMBAYARAN*:
+Setelah transfer, kirimkan foto struk/bukti transfer ke bot dengan caption:
+👉 */konfirmasi*
+Bot akan memverifikasi dan mengaktifkan status Bebas Iklan Anda!`;
+
+          // Cek apakah ada file qris gambar lokal atau URL QRIS di env
+          const localQrisPath = path.join(__dirname, 'qris.jpg');
+          if (process.env.QRIS_IMAGE_URL) {
+            await sock.sendMessage(remoteJid, {
+              image: { url: process.env.QRIS_IMAGE_URL },
+              caption: qrisCaption
+            }, { quoted: msg });
+          } else if (fs.existsSync(localQrisPath)) {
+            const qrisBuffer = await fs.promises.readFile(localQrisPath);
+            await sock.sendMessage(remoteJid, {
+              image: qrisBuffer,
+              caption: qrisCaption
+            }, { quoted: msg });
+          } else {
+            // Generate QR Code pembayaran informatif jika belum ada gambar merchant
+            const qrPaymentUrl = `https://api.qrserver.com/v1/create-qr-code/?size=600x600&margin=15&data=${encodeURIComponent('https://rscripts.net/@SonnDev')}`;
+            await sock.sendMessage(remoteJid, {
+              image: { url: qrPaymentUrl },
+              caption: qrisCaption
+            }, { quoted: msg });
+          }
+          continue;
+        }
+
+        // ================================================================
+        // CEK STATUS BEBAS IKLAN (/cekprem atau /statusprem)
+        // ================================================================
+        const isCekPremCmd = lowerBody === '/cekprem' || lowerBody === '/statusprem' || 
+                             lowerBody === '!cekprem' || lowerBody === '!statusprem';
+        if (isCekPremCmd) {
+          const senderJid = msg.key.participant || remoteJid;
+          const targetJid = isGroup ? remoteJid : senderJid;
+          const premInfo = getPremiumInfo(targetJid);
+
+          if (premInfo) {
+            await sock.sendMessage(remoteJid, {
+              text: `🌟 *STATUS BEBAS IKLAN: AKTIF* 🌟\n\n🎯 *Target*: ${isGroup ? 'Grup Ini' : pushName}\n⏳ *Masa Aktif*: *${premInfo.remainingStr}*\n\n_Nomor/Grup ini bersih dari seluruh pesan promosi & iklan!_ ✨`
+            }, { quoted: msg });
+          } else {
+            await sock.sendMessage(remoteJid, {
+              text: `ℹ️ *STATUS BEBAS IKLAN: NONAKTIF*\n\n🎯 *Target*: ${isGroup ? 'Grup Ini' : pushName}\nStatus: *Gratis (Tampil Iklan berkala)*\n\n💡 _Ingin bebas iklan selamanya? Ketik */premium* atau */qris* untuk upgrade via QRIS mulai dari Rp 5.000!_`
+            }, { quoted: msg });
+          }
+          continue;
+        }
+
+        // ================================================================
+        // KONFIRMASI BUKTI PEMBAYARAN (/konfirmasi atau /bukti)
+        // ================================================================
+        const isConfirmCmd = lowerBody.startsWith('/konfirmasi') || lowerBody.startsWith('/bukti') ||
+                             lowerBody.startsWith('!konfirmasi') || lowerBody.startsWith('!bukti');
+        if (isConfirmCmd) {
+          const media = await extractMedia(msg);
+          const sender = msg.key.participant || remoteJid;
+
+          if (!media || !media.isImage) {
+            await sock.sendMessage(remoteJid, {
+              text: '⚠️ *Kirim foto struk/bukti transfer* dengan caption */konfirmasi* atau balas (reply) foto bukti transfer dengan ketik */konfirmasi*.'
+            }, { quoted: msg });
+            continue;
+          }
+
+          await sock.sendMessage(remoteJid, {
+            text: `✅ *BUKTI PEMBAYARAN DITERIMA!*
+
+Terima kasih @${sender.split('@')[0]}! Bukti pembayaran Anda telah tercatat dalam sistem kami.
+Admin akan segera memverifikasi struk Anda dan mengaktifkan status Bebas Iklan.
+
+Silakan cek status Anda secara berkala dengan ketik:
+👉 */cekprem*`,
+            mentions: [sender]
+          }, { quoted: msg });
+
+          // Beritahu Owner Bot jika terkonfigurasi
+          try {
+            for (const own of OWNER_NUMBERS) {
+              const ownJid = own + '@s.whatsapp.net';
+              await sock.sendMessage(ownJid, {
+                text: `🔔 *NOTIFIKASI PEMBAYARAN BARU* 🔔\n\n👤 *Pengirim*: @${sender.split('@')[0]} (${pushName})\n📍 *Chat*: ${remoteJid}\n⏰ *Waktu*: ${new Date().toLocaleString('id-ID')}\n\nKetik */addprem ${sender} 30* untuk mengaktifkan 30 hari.`,
+                mentions: [sender]
+              });
+            }
+          } catch (ownErr) {
+            // abaikan
+          }
+          continue;
+        }
+
+        // ================================================================
+        // ADMIN: AKTIFKAN BEBAS IKLAN (/addprem <target> <hari>)
+        // ================================================================
+        const isAddPremCmd = lowerBody.startsWith('/addprem') || lowerBody.startsWith('!addprem');
+        if (isAddPremCmd) {
+          const sender = msg.key.participant || remoteJid;
+          if (!isBotOwner(sender)) {
+            await sock.sendMessage(remoteJid, { text: '⚠️ Perintah ini hanya dapat digunakan oleh Pemilik / Admin Bot.' }, { quoted: msg });
+            continue;
+          }
+
+          const parts = body.split(/\s+/).slice(1);
+          let target = parts[0];
+          let days = parts[1] || '30';
+
+          const mentioned = msg.message?.extendedTextMessage?.contextInfo?.mentionedJid || [];
+          if (mentioned.length > 0) {
+            target = mentioned[0];
+            days = parts[1] || '30';
+          } else if (target === 'this' || target === 'ini') {
+            target = remoteJid;
+          } else if (target && /^[0-9]+$/.test(target)) {
+            target = target + '@s.whatsapp.net';
+          }
+
+          if (!target) {
+            await sock.sendMessage(remoteJid, {
+              text: '⚠️ *Format*: */addprem <target/tag/this> <jumlah_hari>*\nContoh:\n• `/addprem @member 30`\n• `/addprem this 30` (untuk grup ini)\n• `/addprem 628123456789 999` (permanen)'
+            }, { quoted: msg });
+            continue;
+          }
+
+          addPremium(target, days);
+          await sock.sendMessage(remoteJid, {
+            text: `✅ *BERHASIL MENGAKTIFKAN PREMIUM / BEBAS IKLAN!*\n\n🎯 *Target*: ${target}\n⏱️ *Durasi*: ${days === '999' || days === 'permanent' ? 'Permanen' : days + ' Hari'}\n✨ _Target sekarang bebas dari seluruh iklan._`
+          }, { quoted: msg });
+          continue;
+        }
+
+        // ================================================================
+        // ADMIN: HAPUS BEBAS IKLAN (/delprem <target>)
+        // ================================================================
+        const isDelPremCmd = lowerBody.startsWith('/delprem') || lowerBody.startsWith('!delprem');
+        if (isDelPremCmd) {
+          const sender = msg.key.participant || remoteJid;
+          if (!isBotOwner(sender)) {
+            await sock.sendMessage(remoteJid, { text: '⚠️ Perintah ini hanya dapat digunakan oleh Pemilik / Admin Bot.' }, { quoted: msg });
+            continue;
+          }
+
+          const parts = body.split(/\s+/).slice(1);
+          let target = parts[0];
+          const mentioned = msg.message?.extendedTextMessage?.contextInfo?.mentionedJid || [];
+          if (mentioned.length > 0) target = mentioned[0];
+          else if (target === 'this') target = remoteJid;
+          else if (target && /^[0-9]+$/.test(target)) target = target + '@s.whatsapp.net';
+
+          if (!target) {
+            await sock.sendMessage(remoteJid, { text: '⚠️ Masukkan nomor/tag target. Contoh: `/delprem @member` atau `/delprem this`' }, { quoted: msg });
+            continue;
+          }
+
+          const deleted = removePremium(target);
+          await sock.sendMessage(remoteJid, {
+            text: deleted ? `🗑️ Status Bebas Iklan untuk *${target}* telah dicabut.` : `⚠️ Target *${target}* tidak terdaftar di daftar premium.`
+          }, { quoted: msg });
+          continue;
+        }
+
+        // ================================================================
+        // ADMIN: LIHAT DAFTAR PREMIUM (/listprem)
+        // ================================================================
+        const isListPremCmd = lowerBody === '/listprem' || lowerBody === '!listprem';
+        if (isListPremCmd) {
+          const sender = msg.key.participant || remoteJid;
+          if (!isBotOwner(sender)) {
+            await sock.sendMessage(remoteJid, { text: '⚠️ Perintah ini hanya dapat digunakan oleh Pemilik / Admin Bot.' }, { quoted: msg });
+            continue;
+          }
+
+          const db = loadPremiumDb();
+          const keys = Object.keys(db);
+          if (keys.length === 0) {
+            await sock.sendMessage(remoteJid, { text: '📋 Belum ada pengguna atau grup yang terdaftar di status Bebas Iklan.' }, { quoted: msg });
+            continue;
+          }
+
+          let listText = `📋 *DAFTAR PENGGUNA & GRUP BEBAS IKLAN* (${keys.length})\n\n`;
+          for (let i = 0; i < keys.length; i++) {
+            const k = keys[i];
+            const p = db[k];
+            const exp = p.expireAt === 'permanent' ? 'Permanen' : new Date(p.expireAt).toLocaleDateString('id-ID');
+            listText += `${i + 1}. *${k}*\n   ⏳ Kedaluwarsa: ${exp}\n`;
+          }
+
+          await sock.sendMessage(remoteJid, { text: listText }, { quoted: msg });
           continue;
         }
 

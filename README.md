@@ -52,8 +52,17 @@ Bot WhatsApp cerdas bertenaga **Google Gemini AI (15-Key Rotation Pool)** dan **
 * 🧩 **Tebak Gambar (`/tebakgambar`)**: Game tebak gambar seru dengan 1.000 level langsung di obrolan / grup!
 * 🧠 **Asah Otak (`/asahotak`)**: Game teka-teki logika dan wawasan seru untuk chat pribadi atau grup!
 * 🏳️ **Menyerah Game (`/nyerah`)**: Menyerah dan melihat jawaban yang benar jika kesulitan.
+* 🎮 **SonnDev Roblox Script (`/roblox`)**: Temukan script game Roblox terbaik & terupdate di rscripts.net.
 
-### 👥 6. Utilitas Grup WhatsApp
+### 💎 6. Sistem Premium & Bebas Iklan (Payment via QRIS)
+* 💎 **Info Paket (`/premium`)**: Cek paket langganan Bebas Iklan untuk Personal atau Grup.
+* 💳 **Pembayaran QRIS (`/qris` atau `/bayar`)**: Scan barcode QRIS instan dari semua E-Wallet & Mobile Banking.
+* 🔍 **Cek Status (`/cekprem`)**: Cek status dan sisa masa aktif Bebas Iklan nomor/grup.
+* 🧾 **Konfirmasi Struk (`/konfirmasi`)**: Kirim foto bukti transfer untuk verifikasi otomatis.
+* 👑 **Admin Management**: `/addprem <target> <hari>`, `/delprem <target>`, `/listprem`.
+* 📢 **Interval Iklan Otomatis**: Iklan SonnDev hanya muncul tiap **5 request di chat pribadi** dan **20 request di grup**. Member/grup Premium 100% bebas iklan.
+
+### 👥 7. Utilitas Grup WhatsApp
 * 📢 **Hidetag (`/hidetag <pesan>`)**: Tag seluruh anggota grup dalam satu pesan.
 * 🚨 **Panggil Admin (`/tagadmin [pesan]`)**: Panggil semua admin grup yang bertugas.
 * 🔒 **Buka / Tutup Grup (`/group open` atau `/group close`)**: Atur izin kirim pesan grup khusus admin.
