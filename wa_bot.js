@@ -2,7 +2,7 @@ require('dotenv').config();
 const path = require('path');
 const fs = require('fs');
 const os = require('os');
-const { execFile } = require('child_process');
+const { execFile, spawn } = require('child_process');
 const crypto = require('crypto');
 const pino = require('pino');
 const qrcode = require('qrcode-terminal');
@@ -48,6 +48,8 @@ const antilinkGroups = new Set();
 
 // Penyimpan game tebak gambar aktif per chat: Map<jid, { jawaban: string, deskripsi: string, img: string }>
 const activeGames = new Map();
+// Penyimpan game asah otak aktif per chat: Map<jid, { soal: string, jawaban: string }>
+const activeAsahOtak = new Map();
 
 // Persona Asisten AI WhatsApp (Profesional, Cerdas & Sopan - Bukan Pacar/Pasangan)
 const DEFAULT_SYSTEM_PROMPT = 
@@ -67,16 +69,24 @@ const DEFAULT_SYSTEM_PROMPT =
   8. Unduh Audio Musik MP3 (/mp3 <judul/link>)
   9. Pembuat Gambar AI (/imagine <prompt>)
   10. Pembuat Stiker Otomatis (/s dari foto/video)
-  11. Text to Speech Suara VN (/tts <teks>)
-  12. Penerjemah AI Multibahasa (/tr <bahasa> <teks>)
-  13. AI Vision (Menganalisis isi foto/gambar yang dikirim)
-  14. Pencarian Wikipedia (/wiki <kueri>)
-  15. Merangkum Artikel Berita (/ringkas <link>)
-  16. Kalkulator Kurs Mata Uang (/kurs <jumlah> <mata_uang>)
-  17. Pembuat Kode QR (/qr <teks>)
-  18. Alarm & Pengingat (/ingatkan <waktu> <pesan>)
-  19. Game Tebak Gambar (/tebakgambar)
-  20. Utilitas Grup (/hidetag <pesan>, /antilink on/off)
+  11. Pembuat Stiker Meme (/smeme <teks_atas> | <teks_bawah>)
+  12. Konversi Stiker ke Foto (/toimg balas stiker)
+  13. Salin Teks Foto / OCR (/ocr balas foto)
+  14. Transkrip Pesan Suara / VN (/transkrip balas audio)
+  15. Info Cuaca Terkini (/cuaca <kota>)
+  16. Kalkulator & Solver Cepat (/calc <soal>)
+  17. Fakta Unik Dunia (/fakta)
+  18. Kata Motivasi Bijak (/quotes)
+  19. Text to Speech Suara VN (/tts <teks>)
+  20. Penerjemah AI Multibahasa (/tr <bahasa> <teks>)
+  21. AI Vision (Menganalisis isi foto/gambar yang dikirim)
+  22. Pencarian Wikipedia (/wiki <kueri>)
+  23. Merangkum Artikel Berita (/ringkas <link>)
+  24. Kalkulator Kurs Mata Uang (/kurs <jumlah> <mata_uang>)
+  25. Pembuat Kode QR (/qr <teks>)
+  26. Alarm & Pengingat (/ingatkan <waktu> <pesan>)
+  27. Game Tebak Gambar (/tebakgambar) & Asah Otak (/asahotak)
+  28. Utilitas Grup (/hidetag, /tagadmin, /group open/close, /kick, /antilink on/off)
 - Pengguna juga bisa langsung mengirimkan/menempelkan tautan link langsung ke chat tanpa harus mengetik perintah!
 - Gunakan formatting WhatsApp yang nyaman dibaca (*bold*, _italic_, daftar poin).
 - Jika pengguna bertanya dalam bahasa lain, jawablah dalam bahasa yang sama dengan profesional.`;
@@ -136,7 +146,7 @@ async function generateAiReply(jid, userMessage, senderName = 'Teman', imageBuff
           { text: prompt },
           {
             inlineData: {
-              mimeType: imageMime || 'image/jpeg',
+              mimeType: (imageMime || 'image/jpeg').split(';')[0],
               data: imageBuffer.toString('base64')
             }
           }
@@ -363,6 +373,23 @@ async function loadTebakGambar() {
 }
 
 // ====================================================================
+// FUNGSI MEMUAT DATASET GAME ASAH OTAK
+// ====================================================================
+let asahOtakCache = [];
+async function loadAsahOtak() {
+  if (asahOtakCache.length > 0) return asahOtakCache;
+  try {
+    const res = await fetch('https://raw.githubusercontent.com/BochilTeam/database/master/games/asahotak.json');
+    if (res.ok) {
+      asahOtakCache = await res.json();
+    }
+  } catch (err) {
+    console.warn('[ASAH OTAK LOAD WARN]', err.message);
+  }
+  return asahOtakCache;
+}
+
+// ====================================================================
 // FUNGSI TEXT TO SPEECH (TTS GOOGLE NATIVE STREAM)
 // ====================================================================
 async function generateTtsAudio(text, lang = 'id') {
@@ -486,6 +513,122 @@ function bufferToWebpSticker(inputBuffer, isVideo = false) {
       reject(err);
     }
   });
+}
+
+// ====================================================================
+// FUNGSI KONVERSI STIKER WEBP MENJADI GAMBAR PNG
+// ====================================================================
+function bufferWebpToImage(inputBuffer) {
+  return new Promise(async (resolve, reject) => {
+    const tempDir = os.tmpdir();
+    const id = 'toimg_' + crypto.randomBytes(6).toString('hex');
+    const inputPath = path.join(tempDir, `${id}.webp`);
+    const outputPath = path.join(tempDir, `${id}.png`);
+
+    try {
+      await fs.promises.writeFile(inputPath, inputBuffer);
+      const ffmpegBin = process.platform === 'win32' ? 'ffmpeg' : (fs.existsSync('/usr/bin/ffmpeg') ? '/usr/bin/ffmpeg' : 'ffmpeg');
+      execFile(ffmpegBin, ['-y', '-i', inputPath, outputPath], { timeout: 25000 }, async (err) => {
+        try {
+          if (fs.existsSync(outputPath)) {
+            const buf = await fs.promises.readFile(outputPath);
+            await fs.promises.unlink(inputPath).catch(() => {});
+            await fs.promises.unlink(outputPath).catch(() => {});
+            return resolve(buf);
+          }
+        } catch (e) {}
+        await fs.promises.unlink(inputPath).catch(() => {});
+        reject(err || new Error('Gagal konversi stiker ke gambar.'));
+      });
+    } catch (err) {
+      reject(err);
+    }
+  });
+}
+
+// ====================================================================
+// FUNGSI PEMBUAT STIKER MEME DENGAN TEKS ATAS / BAWAH
+// ====================================================================
+function bufferToMemeSticker(inputBuffer, topText = '', bottomText = '') {
+  return new Promise(async (resolve, reject) => {
+    const tempDir = os.tmpdir();
+    const id = 'meme_' + crypto.randomBytes(6).toString('hex');
+    const inputPath = path.join(tempDir, `${id}.jpg`);
+    const outputPath = path.join(tempDir, `${id}.webp`);
+
+    try {
+      await fs.promises.writeFile(inputPath, inputBuffer);
+      const ffmpegBin = process.platform === 'win32' ? 'ffmpeg' : (fs.existsSync('/usr/bin/ffmpeg') ? '/usr/bin/ffmpeg' : 'ffmpeg');
+
+      // Bersihkan teks untuk drawtext ffmpeg
+      const cleanTop = (topText || '').toUpperCase().replace(/[:\\']/g, ' ').trim();
+      const cleanBottom = (bottomText || '').toUpperCase().replace(/[:\\']/g, ' ').trim();
+
+      const drawFilters = [];
+      if (cleanTop) {
+        drawFilters.push(`drawtext=text='${cleanTop}':fontcolor=white:bordercolor=black:borderw=3:fontsize=32:x=(w-text_w)/2:y=20`);
+      }
+      if (cleanBottom) {
+        drawFilters.push(`drawtext=text='${cleanBottom}':fontcolor=white:bordercolor=black:borderw=3:fontsize=32:x=(w-text_w)/2:y=h-text_h-20`);
+      }
+
+      const vf = [
+        'scale=512:512:force_original_aspect_ratio=decrease',
+        'pad=512:512:(ow-iw)/2:(oh-ih)/2:color=0x00000000',
+        ...drawFilters
+      ].join(',');
+
+      const args = [
+        '-y',
+        '-i', inputPath,
+        '-vf', vf,
+        '-vcodec', 'libwebp',
+        '-lossless', '0',
+        '-compression_level', '6',
+        '-q:v', '70',
+        outputPath
+      ];
+
+      execFile(ffmpegBin, args, { timeout: 30000 }, async (err) => {
+        try {
+          if (fs.existsSync(outputPath)) {
+            const webpBuf = await fs.promises.readFile(outputPath);
+            await fs.promises.unlink(inputPath).catch(() => {});
+            await fs.promises.unlink(outputPath).catch(() => {});
+            return resolve(webpBuf);
+          }
+        } catch (e) {}
+
+        // Fallback jika drawtext gagal
+        await fs.promises.unlink(inputPath).catch(() => {});
+        bufferToWebpSticker(inputBuffer, false).then(resolve).catch(reject);
+      });
+    } catch (err) {
+      bufferToWebpSticker(inputBuffer, false).then(resolve).catch(reject);
+    }
+  });
+}
+
+// ====================================================================
+// FUNGSI EVALUASI MATEMATIKA AMAN
+// ====================================================================
+function evaluateMath(expr) {
+  try {
+    const sanitized = expr.toLowerCase()
+      .replace(/×/g, '*')
+      .replace(/÷/g, '/')
+      .replace(/,/g, '.')
+      .replace(/%/g, '/100')
+      .replace(/pi/g, 'Math.PI')
+      .replace(/e/g, 'Math.E')
+      .replace(/\^/g, '**');
+
+    if (/^[0-9+\-*/(). Math.PIE**]+$/.test(sanitized)) {
+      const res = Function(`'use strict'; return (${sanitized})`)();
+      if (typeof res === 'number' && !isNaN(res)) return res;
+    }
+  } catch (e) {}
+  return null;
 }
 
 // ====================================================================
@@ -1251,6 +1394,31 @@ async function startWhatsAppBot() {
         }
 
         // ----------------------------------------------------------------
+        // CEK JAWABAN GAME ASAH OTAK (JIKA AKTIF DI CHAT INI)
+        // ----------------------------------------------------------------
+        if (activeAsahOtak.has(remoteJid) && body) {
+          const game = activeAsahOtak.get(remoteJid);
+          const cleanAnswer = lowerBody.replace(/[^a-zA-Z0-9]/g, '');
+          const targetAnswer = game.jawaban.toLowerCase().replace(/[^a-zA-Z0-9]/g, '');
+
+          if (lowerBody === '/nyerah' || lowerBody === '!nyerah') {
+            activeAsahOtak.delete(remoteJid);
+            await sock.sendMessage(remoteJid, {
+              text: `🏳️ *MENYERAH!*\n\nJawaban yang benar adalah: *${game.jawaban.toUpperCase()}*`
+            }, { quoted: msg });
+            continue;
+          } else if (cleanAnswer === targetAnswer) {
+            activeAsahOtak.delete(remoteJid);
+            const winner = msg.key.participant || remoteJid;
+            await sock.sendMessage(remoteJid, {
+              text: `🎉 *JAWABAN BENAR!*\n\nSelamat @${winner.split('@')[0]}! Jawabannya adalah *${game.jawaban.toUpperCase()}*!`,
+              mentions: [winner]
+            }, { quoted: msg });
+            continue;
+          }
+        }
+
+        // ----------------------------------------------------------------
         // PROTEKSI ANTI-LINK GRUP (JIKA ON)
         // ----------------------------------------------------------------
         if (isGroup && antilinkGroups.has(remoteJid)) {
@@ -1305,27 +1473,39 @@ Halo, *${pushName}*! 👋
 
 🎨 *AI KREATIF & MEDIA*
 ├ • */imagine <teks>* : Bikin gambar AI
-├ • */s* : Buat stiker (foto/video)
+├ • */s* : Buat stiker foto/video
+├ • */smeme <atas>|<bwh>* : Stiker meme
+├ • */toimg* : Stiker jadi gambar
+├ • */ocr* : Salin teks dari foto
+├ • */transkrip* : Suara VN jadi teks
 ├ • */tts <teks>* : Teks jadi suara VN
 ├ • */tr <bahasa> <teks>* : Terjemahan AI
 ╰────────────────────────
 
 🧠 *AI & INFORMASI*
 ├ • Kirim foto + caption : Tanya isi foto
+├ • */cuaca <kota>* : Info cuaca terkini
+├ • */calc <soal>* : Kalkulator & solver
 ├ • */wiki <kueri>* : Cari info Wikipedia
 ├ • */ringkas <link>* : Rangkum artikel
-├ • */kurs <jml> <uang>* : Kurs uang (e.g. 100 usd)
+├ • */kurs <jml> <uang>* : Cek kurs uang
 ├ • */qr <teks>* : Buat kode QR
-├ • */ingatkan <waktu> <pesan>* : Alarm
+├ • */ingatkan <wkt> <psn>* : Alarm pengingat
+├ • */fakta* : Fakta unik dunia
+├ • */quotes* : Kata motivasi bijak
 ├ • */ai <teks>* : Tanya AI Gemini
 ├ • */reset* : Hapus riwayat chat
 ╰────────────────────────
 
 👥 *GRUP & GAME*
-├ • */hidetag <pesan>* : Tag semua anggota
+├ • */tebakgambar* : Game tebak gambar
+├ • */asahotak* : Game teka-teki logika
+├ • */nyerah* : Nyerah game
+├ • */hidetag <pesan>* : Tag semua member
+├ • */tagadmin [pesan]* : Panggil admin grup
+├ • */group open/close* : Buka/tutup grup
+├ • */kick @tag* : Keluarkan anggota
 ├ • */antilink on/off* : Proteksi link grup
-├ • */tebakgambar* : Main tebak gambar
-├ • */nyerah* : Nyerah tebak gambar
 ╰────────────────────────
 
 ⚙️ *SISTEM*
@@ -1456,6 +1636,147 @@ Halo, *${pushName}*! 👋
             await sock.sendMessage(remoteJid, {
               text: '❌ Gagal membuat stiker. Pastikan file media tidak rusak dan durasi video di bawah 10 detik.'
             }, { quoted: msg });
+          }
+          continue;
+        }
+
+        // ================================================================
+        // 6B. PEMBUAT STIKER MEME (/smeme <teks atas> | <teks bawah>)
+        // ================================================================
+        const isMemeCommand = lowerBody.startsWith('/smeme') || lowerBody.startsWith('/meme') ||
+                              lowerBody.startsWith('!smeme') || lowerBody.startsWith('!meme');
+
+        if (isMemeCommand) {
+          const rawMemeText = body.replace(/^[\/!](?:smeme|meme)\s*/i, '').trim();
+          const media = await extractMedia(msg);
+
+          if (!media || (!media.isImage && !media.isSticker)) {
+            await sock.sendMessage(remoteJid, {
+              text: '⚠️ *Kirim/Balas foto* dengan format:\n*/smeme <teks atas> | <teks bawah>*\n\nContoh: `/smeme tugas udah selesai | tapi ada revisi`'
+            }, { quoted: msg });
+            continue;
+          }
+
+          const memeParts = rawMemeText.split('|').map(p => p.trim());
+          const topText = memeParts[0] || '';
+          const bottomText = memeParts[1] || '';
+
+          if (!topText && !bottomText) {
+            await sock.sendMessage(remoteJid, {
+              text: '⚠️ Masukkan teks meme. Contoh: `/smeme teks atas | teks bawah`'
+            }, { quoted: msg });
+            continue;
+          }
+
+          await sock.sendMessage(remoteJid, { text: '🎭 *Sedang membuat stiker meme...*' }, { quoted: msg });
+          try {
+            const memeSticker = await bufferToMemeSticker(media.buffer, topText, bottomText);
+            await sock.sendMessage(remoteJid, { sticker: memeSticker }, { quoted: msg });
+          } catch (mErr) {
+            await sock.sendMessage(remoteJid, { text: `❌ Gagal membuat stiker meme: ${mErr.message}` }, { quoted: msg });
+          }
+          continue;
+        }
+
+        // ================================================================
+        // 6C. UBAH STIKER MENJADI GAMBAR BIASA (/toimg)
+        // ================================================================
+        const isToImgCommand = lowerBody === '/toimg' || lowerBody === '!toimg';
+        if (isToImgCommand) {
+          const media = await extractMedia(msg);
+          if (!media || !media.isSticker) {
+            await sock.sendMessage(remoteJid, {
+              text: '⚠️ *Balas (reply) sebuah stiker* dengan perintah */toimg* untuk mengubahnya kembali menjadi gambar biasa.'
+            }, { quoted: msg });
+            continue;
+          }
+
+          await sock.sendMessage(remoteJid, { text: '🔄 *Mengubah stiker menjadi gambar...*' }, { quoted: msg });
+          try {
+            const imgBuffer = await bufferWebpToImage(media.buffer);
+            await sock.sendMessage(remoteJid, {
+              image: imgBuffer,
+              caption: '✅ *Stiker berhasil diubah menjadi gambar!*'
+            }, { quoted: msg });
+          } catch (toImgErr) {
+            await sock.sendMessage(remoteJid, { text: `❌ Gagal mengubah stiker: ${toImgErr.message}` }, { quoted: msg });
+          }
+          continue;
+        }
+
+        // ================================================================
+        // 6D. OCR / SALIN TEKS GAMBAR (/ocr atau /baca)
+        // ================================================================
+        const isOcrCommand = lowerBody === '/ocr' || lowerBody === '/baca' || 
+                             lowerBody.startsWith('/ocr ') || lowerBody.startsWith('/baca ') ||
+                             lowerBody === '!ocr' || lowerBody === '!baca';
+
+        if (isOcrCommand) {
+          const media = await extractMedia(msg);
+          if (!media || !media.isImage) {
+            await sock.sendMessage(remoteJid, {
+              text: '⚠️ *Kirim foto* dengan caption */ocr* atau *balas (reply) foto* dengan ketik */ocr* untuk menyalin teksnya.'
+            }, { quoted: msg });
+            continue;
+          }
+
+          await sock.sendMessage(remoteJid, { text: '🔍 *Sedang membaca dan menyalin teks dari gambar...*' }, { quoted: msg });
+          await sock.sendPresenceUpdate('composing', remoteJid);
+
+          try {
+            const ocrResult = await generateAiReply(
+              remoteJid,
+              'Tolong salin dan ekstrak seluruh teks tulisan yang terlihat pada gambar ini secara akurat dan rapi sesuai aslinya tanpa tambahan kata pengantar atau penutup.',
+              pushName,
+              media.buffer,
+              media.mimeType
+            );
+            await sock.sendPresenceUpdate('paused', remoteJid);
+            await sock.sendMessage(remoteJid, {
+              text: `📝 *HASIL SALIN TEKS (OCR)*:\n\n${ocrResult}`
+            }, { quoted: msg });
+          } catch (ocrErr) {
+            await sock.sendPresenceUpdate('paused', remoteJid);
+            await sock.sendMessage(remoteJid, { text: `❌ Gagal menyalin teks gambar: ${ocrErr.message}` }, { quoted: msg });
+          }
+          continue;
+        }
+
+        // ================================================================
+        // 6E. TRANSKRIP VOICE NOTE / AUDIO KE TEKS (/transkrip atau /vn)
+        // ================================================================
+        const isTranskripCmd = lowerBody === '/transkrip' || lowerBody === '/vn' || 
+                               lowerBody.startsWith('/transkrip ') || lowerBody.startsWith('/vn ') ||
+                               lowerBody === '!transkrip' || lowerBody === '!vn';
+
+        if (isTranskripCmd) {
+          const media = await extractMedia(msg);
+          if (!media || !media.isAudio) {
+            await sock.sendMessage(remoteJid, {
+              text: '⚠️ *Balas (reply) sebuah pesan suara (Voice Note)* dengan ketik */transkrip* untuk mengubahnya menjadi teks tulisan.'
+            }, { quoted: msg });
+            continue;
+          }
+
+          await sock.sendMessage(remoteJid, { text: '🎙️ *Sedang mendengarkan dan mentranskrip pesan suara...*' }, { quoted: msg });
+          await sock.sendPresenceUpdate('composing', remoteJid);
+
+          try {
+            const cleanMime = (media.mimeType || 'audio/ogg').split(';')[0];
+            const transcript = await generateAiReply(
+              remoteJid,
+              'Tolong transkrip seluruh perkataan dan ucapan dalam rekaman suara ini secara akurat, rapi, dan lengkap sesuai kata yang diucapkan tanpa penjelasan pengantar.',
+              pushName,
+              media.buffer,
+              cleanMime
+            );
+            await sock.sendPresenceUpdate('paused', remoteJid);
+            await sock.sendMessage(remoteJid, {
+              text: `🎙️ *TRANSKRIP VOICE NOTE*:\n\n"${transcript}"`
+            }, { quoted: msg });
+          } catch (trErr) {
+            await sock.sendPresenceUpdate('paused', remoteJid);
+            await sock.sendMessage(remoteJid, { text: `❌ Gagal mentranskrip audio: ${trErr.message}` }, { quoted: msg });
           }
           continue;
         }
@@ -1685,6 +2006,128 @@ Halo, *${pushName}*! 👋
         }
 
         // ================================================================
+        // 13B. INFO CUACA REALTIME (/cuaca <nama kota>)
+        // ================================================================
+        const isCuacaCommand = lowerBody.startsWith('/cuaca') || lowerBody.startsWith('!cuaca');
+        if (isCuacaCommand) {
+          const kota = body.replace(/^[\/!]cuaca\s*/i, '').trim();
+          if (!kota) {
+            await sock.sendMessage(remoteJid, {
+              text: '⚠️ *Format*: */cuaca <nama kota>*\nContoh: `/cuaca Jakarta` atau `/cuaca Bandung`'
+            }, { quoted: msg });
+            continue;
+          }
+
+          await sock.sendMessage(remoteJid, { text: `🌤️ *Memeriksa cuaca untuk ${kota}...*` }, { quoted: msg });
+          try {
+            const res = await fetch(`https://wttr.in/${encodeURIComponent(kota)}?format=j1`);
+            if (!res.ok) throw new Error(`Status ${res.status}`);
+            const data = await res.json();
+            const cur = data.current_condition?.[0] || {};
+            const area = data.nearest_area?.[0] || {};
+            const locName = area.areaName?.[0]?.value || kota;
+            const countryName = area.country?.[0]?.value || '';
+
+            const cuacaText = 
+`🌤️ *INFORMASI CUACA TERKINI*
+
+📍 *Lokasi*: ${locName}${countryName ? ', ' + countryName : ''}
+🌡️ *Suhu*: ${cur.temp_C || '-'}°C (Terasa seperti ${cur.FeelsLikeC || '-'}°C)
+☁️ *Kondisi*: ${cur.weatherDesc?.[0]?.value || 'Cerah'}
+💧 *Kelembapan*: ${cur.humidity || '-'}%
+💨 *Kecepatan Angin*: ${cur.windspeedKmph || '-'} km/jam
+👁️ *Jarak Pandang*: ${cur.visibility || '-'} km`;
+
+            await sock.sendMessage(remoteJid, { text: cuacaText }, { quoted: msg });
+          } catch (cErr) {
+            await sock.sendMessage(remoteJid, { text: `❌ Gagal memeriksa cuaca untuk "${kota}". Pastikan ejaan nama kota benar.` }, { quoted: msg });
+          }
+          continue;
+        }
+
+        // ================================================================
+        // 13C. KALKULATOR & SOLVER MATEMATIKA (/calc <soal>)
+        // ================================================================
+        const isCalcCommand = lowerBody.startsWith('/calc') || lowerBody.startsWith('/hitung') ||
+                              lowerBody.startsWith('!calc') || lowerBody.startsWith('!hitung');
+
+        if (isCalcCommand) {
+          const expr = body.replace(/^[\/!](?:calc|hitung)\s*/i, '').trim();
+          if (!expr) {
+            await sock.sendMessage(remoteJid, {
+              text: '⚠️ *Format*: */calc <hitungan atau soal>*\nContoh:\n• `/calc (50000 * 15%) + 2500`\n• `/calc 25 * 40 - 150`\n• `/calc 3x + 12 = 45 berapa nilai x?`'
+            }, { quoted: msg });
+            continue;
+          }
+
+          const mathResult = evaluateMath(expr);
+          if (mathResult !== null) {
+            await sock.sendMessage(remoteJid, {
+              text: `🔢 *HASIL PERHITUNGAN*\n\n*${expr}* = *${mathResult.toLocaleString('id-ID')}*`
+            }, { quoted: msg });
+          } else {
+            // Gunakan Gemini AI untuk soal persamaan atau pemecahan kalimat
+            await sock.sendMessage(remoteJid, { text: '🧮 *Menghitung dan memecahkan soal matematika...*' }, { quoted: msg });
+            try {
+              const solution = await generateAiReply(
+                remoteJid,
+                `Kamu adalah ahli matematika. Selesaikan atau hitung soal berikut dengan tepat, jelas, dan jelaskan langkah pentingnya secara padat dalam bahasa Indonesia: ${expr}`,
+                pushName
+              );
+              await sock.sendMessage(remoteJid, {
+                text: `🧮 *SOLUSI MATEMATIKA*:\n\n${solution}`
+              }, { quoted: msg });
+            } catch (calcErr) {
+              await sock.sendMessage(remoteJid, { text: `❌ Gagal menghitung: ${calcErr.message}` }, { quoted: msg });
+            }
+          }
+          continue;
+        }
+
+        // ================================================================
+        // 13D. FAKTA UNIK DUNIA (/fakta)
+        // ================================================================
+        const isFaktaCmd = lowerBody === '/fakta' || lowerBody === '!fakta';
+        if (isFaktaCmd) {
+          await sock.sendMessage(remoteJid, { text: '🌍 *Mencari fakta unik dunia...*' }, { quoted: msg });
+          try {
+            const faktaText = await generateAiReply(
+              remoteJid,
+              'Berikan 1 buah fakta unik, mencengangkan, atau fakta ilmiah/sejarah menarik di dunia dalam bahasa Indonesia. Format dengan judul menarik ber-emoji, lalu penjelasan ringkas 2-3 kalimat.',
+              pushName
+            );
+            await sock.sendMessage(remoteJid, {
+              text: `💡 *TAHUKAH KAMU?*\n\n${faktaText}`
+            }, { quoted: msg });
+          } catch (fErr) {
+            await sock.sendMessage(remoteJid, { text: `❌ Gagal mengambil fakta: ${fErr.message}` }, { quoted: msg });
+          }
+          continue;
+        }
+
+        // ================================================================
+        // 13E. KATA MOTIVASI / QUOTES (/quotes atau /motivasi)
+        // ================================================================
+        const isQuotesCmd = lowerBody === '/quotes' || lowerBody === '/quote' || 
+                            lowerBody === '/motivasi' || lowerBody === '!quotes' || lowerBody === '!motivasi';
+        if (isQuotesCmd) {
+          await sock.sendMessage(remoteJid, { text: '✨ *Mengambil kata motivasi inspiratif...*' }, { quoted: msg });
+          try {
+            const quoteText = await generateAiReply(
+              remoteJid,
+              'Berikan 1 kutipan atau kata-kata motivasi yang inspiratif dan mendalam dari tokoh terkenal dunia dalam bahasa Indonesia. Sertakan nama tokohnya dan format yang indah dengan emoji.',
+              pushName
+            );
+            await sock.sendMessage(remoteJid, {
+              text: `✨ *KATA MOTIVASI HARI INI*\n\n${quoteText}`
+            }, { quoted: msg });
+          } catch (qErr) {
+            await sock.sendMessage(remoteJid, { text: `❌ Gagal mengambil kutipan: ${qErr.message}` }, { quoted: msg });
+          }
+          continue;
+        }
+
+        // ================================================================
         // 14. GAME TEBAK GAMBAR (/tebakgambar atau /tg)
         // ================================================================
         const isTgCommand = lowerBody === '/tebakgambar' || 
@@ -1719,6 +2162,37 @@ Halo, *${pushName}*! 👋
           await sock.sendMessage(remoteJid, {
             image: { url: q.img },
             caption: `🎮 *GAME TEBAK GAMBAR*\n\nPetunjuk: *${clue}*\n\nKetik jawaban Anda langsung di chat!\n(Ketik */nyerah* jika menyerah)`
+          }, { quoted: msg });
+          continue;
+        }
+
+        // ================================================================
+        // 14B. GAME ASAH OTAK & TEKA-TEKI (/asahotak)
+        // ================================================================
+        const isAsahOtakCmd = lowerBody === '/asahotak' || lowerBody === '!asahotak' || lowerBody === '/ao';
+        if (isAsahOtakCmd) {
+          if (activeAsahOtak.has(remoteJid)) {
+            await sock.sendMessage(remoteJid, {
+              text: '⚠️ Masih ada teka-teki asah otak yang belum terjawab di chat ini! Ketik */nyerah* jika menyerah.'
+            }, { quoted: msg });
+            continue;
+          }
+
+          await sock.sendMessage(remoteJid, { text: '🧠 *Mengambil soal asah otak...*' }, { quoted: msg });
+          const dataset = await loadAsahOtak();
+          if (!dataset || dataset.length === 0) {
+            await sock.sendMessage(remoteJid, { text: '❌ Gagal memuat database asah otak. Coba lagi nanti.' }, { quoted: msg });
+            continue;
+          }
+
+          const q = dataset[Math.floor(Math.random() * dataset.length)];
+          activeAsahOtak.set(remoteJid, {
+            soal: q.soal,
+            jawaban: q.jawaban
+          });
+
+          await sock.sendMessage(remoteJid, {
+            text: `🧠 *GAME ASAH OTAK* 🧠\n\n*Pertanyaan*:\n"${q.soal}"\n\n💡 _Ketik langsung jawabanmu di obrolan!_\n_(Ketik */nyerah* jika ingin menyerah)_`
           }, { quoted: msg });
           continue;
         }
@@ -1812,6 +2286,148 @@ Halo, *${pushName}*! 👋
           } else {
             const isAct = antilinkGroups.has(remoteJid);
             await sock.sendMessage(remoteJid, { text: `🛡️ Status Anti-Link grup ini: *${isAct ? 'ON' : 'OFF'}*\nKetik */antilink on* atau */antilink off*` }, { quoted: msg });
+          }
+          continue;
+        }
+
+        // ================================================================
+        // 17B. PANGGIL ADMIN GRUP (/tagadmin [pesan])
+        // ================================================================
+        const isTagAdminCmd = lowerBody.startsWith('/tagadmin') || lowerBody.startsWith('!tagadmin');
+        if (isTagAdminCmd) {
+          if (!isGroup) {
+            await sock.sendMessage(remoteJid, { text: '⚠️ Perintah ini hanya dapat digunakan di dalam grup!' }, { quoted: msg });
+            continue;
+          }
+
+          try {
+            const groupMetadata = await sock.groupMetadata(remoteJid);
+            const admins = groupMetadata.participants
+              .filter(p => p.admin === 'admin' || p.admin === 'superadmin')
+              .map(p => p.id);
+
+            if (admins.length === 0) {
+              await sock.sendMessage(remoteJid, { text: '⚠️ Tidak ada admin terdeteksi di grup ini.' }, { quoted: msg });
+              continue;
+            }
+
+            const reason = body.replace(/^[\/!]tagadmin\s*/i, '').trim();
+            const mentionList = admins.map(a => `@${a.split('@')[0]}`).join(' ');
+
+            await sock.sendMessage(remoteJid, {
+              text: `🚨 *PANGGILAN UNTUK ADMIN GRUP* 🚨\n\n📢 *Dari*: ${pushName}\n📝 *Pesan*: ${reason || 'Ada member yang membutuhkan bantuan admin!'}\n\n👥 ${mentionList}`,
+              mentions: admins
+            }, { quoted: msg });
+          } catch (adminErr) {
+            await sock.sendMessage(remoteJid, { text: `❌ Gagal memanggil admin: ${adminErr.message}` }, { quoted: msg });
+          }
+          continue;
+        }
+
+        // ================================================================
+        // 17C. BUKA / TUTUP GRUP (/group open atau /group close)
+        // ================================================================
+        const isGroupSettingCmd = lowerBody.startsWith('/group ') || lowerBody.startsWith('!group ');
+        if (isGroupSettingCmd) {
+          if (!isGroup) {
+            await sock.sendMessage(remoteJid, { text: '⚠️ Perintah ini hanya dapat digunakan di dalam grup!' }, { quoted: msg });
+            continue;
+          }
+
+          const action = lowerBody.replace(/^[\/!]group\s*/i, '').trim();
+          try {
+            const groupMetadata = await sock.groupMetadata(remoteJid);
+            const admins = groupMetadata.participants
+              .filter(p => p.admin === 'admin' || p.admin === 'superadmin')
+              .map(p => p.id);
+
+            const sender = msg.key.participant || remoteJid;
+            const isSenderAdmin = admins.includes(sender);
+            const botNumberClean = (sock.user?.id ? sock.user.id.split(':')[0] : '');
+            const isBotAdmin = admins.some(a => a.startsWith(botNumberClean));
+
+            if (!isSenderAdmin) {
+              await sock.sendMessage(remoteJid, { text: '⚠️ Hanya admin grup yang dapat mengubah pengaturan grup!' }, { quoted: msg });
+              continue;
+            }
+
+            if (!isBotAdmin) {
+              await sock.sendMessage(remoteJid, { text: '⚠️ Jadikan bot sebagai admin grup terlebih dahulu untuk mengubah setelan ini.' }, { quoted: msg });
+              continue;
+            }
+
+            if (action === 'close' || action === 'tutup') {
+              await sock.groupSettingUpdate(remoteJid, 'announcement');
+              await sock.sendMessage(remoteJid, {
+                text: '🔒 *GRUP DITUTUP*\nSekarang hanya admin yang dapat mengirim pesan.'
+              }, { quoted: msg });
+            } else if (action === 'open' || action === 'buka') {
+              await sock.groupSettingUpdate(remoteJid, 'not_announcement');
+              await sock.sendMessage(remoteJid, {
+                text: '🔓 *GRUP DIBUKA*\nSekarang semua anggota grup dapat mengirim pesan.'
+              }, { quoted: msg });
+            } else {
+              await sock.sendMessage(remoteJid, { text: '⚠️ *Format*: */group open* (buka grup) atau */group close* (tutup grup)' }, { quoted: msg });
+            }
+          } catch (grpErr) {
+            await sock.sendMessage(remoteJid, { text: `❌ Gagal mengubah setelan grup: ${grpErr.message}` }, { quoted: msg });
+          }
+          continue;
+        }
+
+        // ================================================================
+        // 17D. KELUARKAN ANGGOTA GRUP (/kick @tag)
+        // ================================================================
+        const isKickCmd = lowerBody.startsWith('/kick') || lowerBody.startsWith('!kick');
+        if (isKickCmd) {
+          if (!isGroup) {
+            await sock.sendMessage(remoteJid, { text: '⚠️ Perintah ini hanya dapat digunakan di dalam grup!' }, { quoted: msg });
+            continue;
+          }
+
+          try {
+            const groupMetadata = await sock.groupMetadata(remoteJid);
+            const admins = groupMetadata.participants
+              .filter(p => p.admin === 'admin' || p.admin === 'superadmin')
+              .map(p => p.id);
+
+            const sender = msg.key.participant || remoteJid;
+            const isSenderAdmin = admins.includes(sender);
+            const botNumberClean = (sock.user?.id ? sock.user.id.split(':')[0] : '');
+            const isBotAdmin = admins.some(a => a.startsWith(botNumberClean));
+
+            if (!isSenderAdmin) {
+              await sock.sendMessage(remoteJid, { text: '⚠️ Hanya admin grup yang diizinkan mengeluarkan anggota!' }, { quoted: msg });
+              continue;
+            }
+
+            if (!isBotAdmin) {
+              await sock.sendMessage(remoteJid, { text: '⚠️ Jadikan bot sebagai admin grup terlebih dahulu untuk mengeluarkan anggota.' }, { quoted: msg });
+              continue;
+            }
+
+            const mentioned = msg.message?.extendedTextMessage?.contextInfo?.mentionedJid || [];
+            if (mentioned.length === 0) {
+              await sock.sendMessage(remoteJid, {
+                text: '⚠️ *Format*: */kick @nama_anggota*\nTag anggota yang ingin dikeluarkan dari grup.'
+              }, { quoted: msg });
+              continue;
+            }
+
+            // Cegah kick bot sendiri
+            const targetsToKick = mentioned.filter(m => !m.includes(botNumberClean));
+            if (targetsToKick.length === 0) {
+              await sock.sendMessage(remoteJid, { text: '⚠️ Bot tidak bisa mengeluarkan dirinya sendiri.' }, { quoted: msg });
+              continue;
+            }
+
+            await sock.groupParticipantsUpdate(remoteJid, targetsToKick, 'remove');
+            await sock.sendMessage(remoteJid, {
+              text: `👋 Anggota berhasil dikeluarkan dari grup oleh admin @${sender.split('@')[0]}.`,
+              mentions: [sender]
+            }, { quoted: msg });
+          } catch (kickErr) {
+            await sock.sendMessage(remoteJid, { text: `❌ Gagal mengeluarkan anggota: ${kickErr.message}` }, { quoted: msg });
           }
           continue;
         }
