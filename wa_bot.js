@@ -399,10 +399,10 @@ async function downloadXiaohongshu(rawUrl) {
 }
 
 // ====================================================================
-// SERVER HTTP HEALTH-CHECK (UNTUK CLOUD DEPLOYMENT SEPERTI RENDER/RAILWAY)
+// SERVER HTTP HEALTH-CHECK (UNTUK CLOUD DEPLOYMENT SEPERTI HUGGINGFACE/RENDER)
 // ====================================================================
 const http = require('http');
-const HTTP_PORT = process.env.PORT || 3000;
+const HTTP_PORT = process.env.PORT || 7860;
 try {
   const healthServer = http.createServer((req, res) => {
     res.writeHead(200, { 'Content-Type': 'application/json' });
